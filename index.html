@@ -223,6 +223,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .price-in:focus-within{outline:2px solid var(--accent);outline-offset:2px}
 .print-area{display:none}
 @media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;white-space:pre;font:12px/1.25 monospace;color:#000;background:#fff}}
+.hold-row{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 10px}
+.hold-row .btn{flex:1 1 auto;min-height:40px}
 .ac-foot{position:sticky;bottom:-20px;background:var(--surface);padding:8px 0 4px;margin-top:8px}
 .ac-foot .pin-err{margin:0 0 6px;font-weight:600}
 .modal-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
@@ -362,6 +364,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     <div class="layout">
       <div class="catalog">
         <div id="shiftBar" class="note" hidden></div>
+        <div id="holdTop" class="note" hidden></div>
         <div id="sampleNote" class="note" hidden>
           <p>Ini produk contoh. Ubah nama, gambar, dan harganya di tab Produk, atau hapus semuanya.</p>
           <button class="btn small" type="button" id="delSamples" data-act="delSamples">Hapus semua contoh</button>
@@ -386,6 +389,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
             <button class="clear" type="button" id="clearBtn" data-act="clear" hidden>Kosongkan</button>
           </div>
           <div class="lines" id="lines"></div>
+          <div class="hold-row" id="holdRow" hidden></div>
           <div class="pay">
             <div class="disc-row" id="discBox" hidden>
               <label class="cash" for="discIn"><span id="discUnit">Rp</span><input id="discIn" inputmode="numeric" autocomplete="off" placeholder="Diskon (opsional)"></label>
@@ -885,6 +889,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     $('#discErr').textContent=(showD&&!isAdminU()&&wanted>cc.dcM)?('Diskon maksimal kasir '+maxDiscPct()+'% dari subtotal ('+rp(cc.dcM)+').'):'';
     $('#sumBox').innerHTML=(cc.dc||cc.tx)?adjRows({sub:cc.sub,dc:cc.dc,tx:cc.tx,tp:taxPct()}).map(function(r){return sumRow(r[0],r[1],'');}).join(''):'';
     $('#clearBtn').hidden=!lines.length;
+    renderHoldRow();
     $('#cartSub').textContent=lines.length?cartCount()+' item':'Pesanan baru';
     updateBar();
     renderPay();
@@ -1686,7 +1691,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     newProd:'products',editProd:'products',edSave:'products',edDel:'products',edPick:'products',edClearImg:'products',
     genCode:'products',edBarImg:'products',edScan:'products',regUnknown:'products',delSamples:'products',
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
-    adminOut:'accounts',bkSave:'accounts',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
+    adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
     rfOpen:'refund.own',rfOk:'refund.own',rfInc:'refund.own',rfDec:'refund.own',rfReason:'refund.own',rfRestock:'refund.own',rfCancel:'refund.own'
@@ -1920,6 +1925,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function acDlg(mode,id){
     S.acMode=mode;S.acId=id||'';
     if(mode==='print'){pfDlg();return;}
+    if(mode==='holdName'){holdNameDlg();return;}
+    if(mode==='holdList'){holdListDlg();return;}
     if(mode==='op'){opDlg(id);return;}
     var u=id?users().find(function(x){return x.id===id;}):null,h='<div class="modal">';
     if(mode==='rec'){
@@ -2010,6 +2017,115 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     o.push(HR2);
     o.push('~*** Akhir laporan ***');
     return o.join('\n');
+  }
+
+
+  /* ----- Tahan pesanan ----- */
+  var HOLD_KEY='kasirku:holds';
+  function holdsAll(){
+    if(!S.holds){
+      var j=null;try{j=JSON.parse(localStorage.getItem(HOLD_KEY)||'null');}catch(e){}
+      S.holds=Array.isArray(j)?j.filter(function(h){return h&&h.id&&h.cart&&typeof h.cart==='object';}):[];
+    }
+    return S.holds;
+  }
+  function holdsSave(){try{localStorage.setItem(HOLD_KEY,JSON.stringify(S.holds||[]));}catch(e){}}
+  function holdsVisible(){
+    var a=activeShift(),u=me();
+    if(!a||!u)return [];
+    return holdsAll().filter(function(h){return h.sh===a.id&&(u.r==='admin'||h.ku===u.id);});
+  }
+  function pruneHolds(){
+    var a=activeShift(),id=a?a.id:'';
+    S.holds=holdsAll().filter(function(h){return id&&h.sh===id;});
+    holdsSave();
+  }
+  function holdEst(h){
+    var t=0;
+    Object.keys(h.cart).forEach(function(pid){
+      var p=S.products.find(function(x){return x.id===pid;});if(!p)return;
+      var q=h.cart[pid];
+      if(p.op)t+=Math.floor(Number(h.cartP&&h.cartP[pid])||0);else t+=p.price*q-lineDisc(p,q);
+    });
+    return t;
+  }
+  function holdCount(h){return Object.keys(h.cart).reduce(function(a,k){return a+(h.cart[k]||0);},0);}
+  function renderHoldRow(){
+    var el=$('#holdRow');if(!el)return;
+    var n=holdsVisible().length,has=cartLines().length>0;
+    var ht=$('#holdTop');
+    if(ht){
+      if(can('sell')&&n){ht.hidden=false;ht.innerHTML='<p><b>'+n+' pesanan ditahan.</b> Ketuk untuk membuka atau menghapus.</p><button class="btn small" type="button" data-act="holdList">Lihat pesanan ditahan</button>';}
+      else{ht.hidden=true;ht.innerHTML='';}
+    }
+    if(!(can('sell')&&activeShift())||(!has&&!n)){el.hidden=true;el.innerHTML='';return;}
+    el.hidden=false;
+    el.innerHTML=(has?'<button class="btn" type="button" data-act="holdAsk">Tahan pesanan</button>':'')
+      +(n?'<button class="btn" type="button" data-act="holdList">Pesanan ditahan ('+n+')</button>':'');
+  }
+  function holdNameDlg(){
+    var n=holdsVisible().length+1;
+    $('#acDlg').innerHTML='<div class="modal"><h2 id="acTitle">Tahan pesanan</h2><p class="hint" style="margin:0 0 10px">Pesanan disimpan sementara dan keranjang dikosongkan. Beri nama supaya mudah dicari.</p>'
+      +'<div class="form-row"><label class="lbl" for="hdName">Nama pesanan</label><input class="field" id="hdName" maxlength="24" autocomplete="off" placeholder="Contoh: Meja 3 atau Bu Ani" value="Pesanan '+n+'"></div>'
+      +'<div class="modal-actions"><button class="btn grow" type="button" data-act="acCancel">Batal</button><button class="btn primary grow" type="button" data-act="holdOk">Tahan</button></div></div>';
+    S.acMode='holdName';$('#acDlg').style.zIndex='80';$('#acDlg').hidden=false;
+    setTimeout(function(){var f=$('#hdName');if(f){f.focus();f.select();}},40);
+  }
+  function holdSubmit(){
+    var a=activeShift(),u=me();
+    if(!can('sell')||!a||!u){acClose();toast('Buka shift dulu sebelum berjualan.');return;}
+    var lines=cartLines();
+    if(!lines.length){acClose();return;}
+    var nm=(($('#hdName')||{}).value||'').trim()||('Pesanan '+(holdsVisible().length+1));
+    var cart={},cp={};
+    lines.forEach(function(l){cart[l.p.id]=l.q;if(l.p.op)cp[l.p.id]=l.p.price;});
+    pruneHolds();
+    S.holds.push({id:'h'+Date.now().toString(36)+Math.random().toString(36).slice(2,4),n:nm,ku:u.id,kn:u.n,sh:a.id,t:new Date().toISOString(),cart:cart,cartP:cp,disc:{m:S.disc.m,v:S.disc.v}});
+    holdsSave();
+    S.cart={};S.cartP={};S.cash=0;S.disc={m:'rp',v:0};$('#cashIn').value='';var di=$('#discIn');if(di)di.value='';
+    acClose();closeCart();updateBadges();renderCart();
+    toast('Pesanan "'+nm+'" ditahan.');
+  }
+  function holdListDlg(){
+    var list=holdsVisible().slice().sort(function(a,b){return a.t.localeCompare(b.t);}),admin=isAdminU();
+    var rows=list.length?list.map(function(h){
+      var d=new Date(h.t);
+      return '<div class="erow" style="margin-bottom:6px"><div class="einfo"><div class="en">'+esc(h.n)+'</div><div class="sub">'+holdCount(h)+' item · sekitar '+rp(holdEst(h))+'</div><div class="sub">'+tm(d)+(admin?' · '+esc(h.kn||''):'')+'</div></div>'
+        +'<div class="btn-grp"><button class="btn small primary" type="button" data-act="holdOpen" data-id="'+esc(h.id)+'">Buka</button><button class="btn small danger" type="button" data-act="holdDel" data-id="'+esc(h.id)+'">Hapus</button></div></div>';
+    }).join(''):'<div class="empty">Tidak ada pesanan ditahan.</div>';
+    $('#acDlg').innerHTML='<div class="modal"><h2 id="acTitle">Pesanan ditahan</h2>'+rows
+      +'<p class="hint" style="margin:8px 0 0">Pesanan ditahan hilang kalau shift ditutup. Harga final dihitung ulang saat dibuka.</p>'
+      +'<div class="modal-actions" style="margin-top:10px"><button class="btn grow" type="button" data-act="acCancel">Tutup</button></div></div>';
+    S.acMode='holdList';$('#acDlg').style.zIndex='80';$('#acDlg').hidden=false;
+  }
+  function holdOpen(id){
+    var i=holdsAll().findIndex(function(h){return h.id===id;});
+    if(i<0||!holdsVisible().some(function(h){return h.id===id;})){toast('Pesanan tidak ditemukan.');holdListDlg();return;}
+    if(cartLines().length){toast('Tahan atau kosongkan pesanan yang sekarang dulu.');return;}
+    var h=S.holds[i],cut=0,gone=0;
+    S.cart={};S.cartP={};
+    Object.keys(h.cart).forEach(function(pid){
+      var p=S.products.find(function(x){return x.id===pid;}),q=h.cart[pid]||0;
+      if(!p||q<=0){gone++;return;}
+      if(p.op){S.cartP[pid]=Math.floor(Number(h.cartP&&h.cartP[pid])||0);S.cart[pid]=1;return;}
+      if(hasStock(p)&&q>p.stock){q=Math.max(0,p.stock);cut++;}
+      if(q>0)S.cart[pid]=q;else gone++;
+    });
+    S.disc=h.disc||{m:'rp',v:0};S.cash=0;
+    S.holds.splice(i,1);holdsSave();
+    acClose();updateBadges();renderCart();
+    var di=$('#discIn');if(di)di.value=S.disc.v?fmt(S.disc.v):'';
+    toast('Pesanan "'+h.n+'" dibuka.'+((cut||gone)?' Ada barang yang berubah (stok atau produk dihapus).':''));
+  }
+  function holdDel(b){
+    var id=b.dataset.id;
+    if(b.dataset.arm!=='1'){
+      b.dataset.arm='1';b.textContent='Yakin?';
+      setTimeout(function(){if(b.isConnected){b.dataset.arm='';b.textContent='Hapus';}},3000);
+      return;
+    }
+    S.holds=holdsAll().filter(function(h){return h.id!==id;});holdsSave();
+    holdListDlg();renderHoldRow();toast('Pesanan ditahan dihapus.');
   }
 
   /* ----- Cetak struk (printer thermal) ----- */
@@ -2173,6 +2289,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function acClose(){$('#acDlg').style.zIndex='';$('#acDlg').hidden=true;$('#acDlg').innerHTML='';}
   async function acSubmit(){
     if(S.acMode==='op'){opSubmit();return;}
+    if(S.acMode==='holdName'){holdSubmit();return;}
     var m=S.acMode,btn=$('#acOk');
     if(!btn||btn.disabled)return;
     var err=function(t){var e=$('#acErr');if(e)e.textContent=t;toast(t);};
@@ -2346,7 +2463,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var u=me();
     $('#selfBox').innerHTML='<div class="erow" style="border:0;padding:0;background:transparent"><div class="einfo"><div class="en">'+esc(u.n)+'<span class="pill on">Admin</span></div><div class="sub">@'+esc(u.u)+'</div></div>'
       +'<button class="btn small" type="button" data-act="acSelf">Ubah akun saya</button></div>'
-      +'<p class="hint">Admin punya akses penuh. Kalau lupa password, pakai kode pemulihan dari layar masuk.</p><p class="hint">Versi aplikasi: 22</p>';
+      +'<p class="hint">Admin punya akses penuh. Kalau lupa password, pakai kode pemulihan dari layar masuk.</p><p class="hint">Versi aplikasi: 23</p>';
     renderBk();
     var list=users().filter(function(x){return x.r==='kasir';}),a=activeShift();
     $('#kasList').innerHTML=list.length?list.map(function(k){
@@ -2569,6 +2686,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function shDlg(mode,sh){
     S.shMode=mode;
+    if(mode==='done')pruneHolds();
     var h='<div class="modal">',err='<p class="hint pin-err" id="shErr" role="alert"></p>';
     var btns=function(ok){return '<div class="modal-actions"><button class="btn grow" type="button" data-act="shiftCancel">Batal</button><button class="btn primary grow" type="button" id="shOk" data-act="shiftOk">'+ok+'</button></div>';};
     var u=me();if(!u)return;
@@ -2733,6 +2851,11 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'opEdit':if(can('sell'))acDlg('op',id);break;
       case 'opQ':{var oi=$('#opAmt');if(oi){oi.value=fmt(parseInt(b.dataset.v,10)||0);}break;}
       case 'opOk':opSubmit();break;
+      case 'holdAsk':if(!cartLines().length){toast('Keranjang masih kosong.');break;}acDlg('holdName');break;
+      case 'holdOk':holdSubmit();break;
+      case 'holdList':acDlg('holdList');break;
+      case 'holdOpen':holdOpen(id);break;
+      case 'holdDel':holdDel(b);break;
       case 'inc':setQty(id,(S.cart[id]||0)+1);break;
       case 'dec':setQty(id,(S.cart[id]||0)-1);break;
       case 'rm':setQty(id,0);break;
