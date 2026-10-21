@@ -427,7 +427,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
               <p class="hint pin-err" id="discErr" style="margin:0"></p>
             </div>
             <div class="disc-sum" id="sumBox"></div>
-            <div class="mb-row"><input class="field" id="mbIn" list="mbDl" maxlength="40" autocomplete="off" placeholder="Member (opsional): nama atau HP"><datalist id="mbDl"></datalist><button class="btn small" type="button" data-act="mbNew">+ Baru</button></div>
+            <div class="mb-row" id="mbRow"><input class="field" id="mbIn" list="mbDl" maxlength="40" autocomplete="off" placeholder="Member (opsional): nama atau HP"><datalist id="mbDl"></datalist><button class="btn small" type="button" data-act="mbNew">+ Baru</button></div>
             <div class="hint" id="mbStat" style="margin:0"></div>
             <div class="total-row"><span class="lbl">Total</span><span class="amt" id="totalAmt">Rp 0</span></div>
             <div class="seg" id="methSeg" role="group" aria-label="Cara bayar">
@@ -492,6 +492,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     <div class="panel" id="thBox"></div>
     <div class="section-head"><h2>Cadangan data</h2></div>
     <div class="panel" id="bkBox"></div>
+    <div class="section-head"><h2>Member</h2></div>
+    <div class="panel" id="mbBox"></div>
     <div class="section-head"><h2>Kasbon</h2></div>
     <div class="panel" id="kbBox"></div>
     <div class="section-head"><h2>Layar pelanggan dan pantau</h2></div>
@@ -634,7 +636,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='42';
+  var LS='kasirku:v1',APP_VER='43';
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -790,7 +792,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(!db)saveLocal();
     },
     saveMember:async function(rec){
-      need('member');
+      need('member');if(!mbOn())forbid();
       var base=S.store;
       if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
       var list=(Array.isArray(base.mbr)?base.mbr:[]).slice(),i=list.findIndex(function(x){return x.id===rec.id;});
@@ -962,15 +964,16 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     return Math.max(0,Math.min(a,sub));
   }
   function cartCalc(){
-    var sub=cartSub(),pd=Math.min(cartPd(),sub),net=sub-pd,dcM=discAmt(net),dc=pd+dcM,base=sub-dc,tx=Math.round(base*taxPct()/100);
-    return {sub:sub,pd:pd,net:net,dcM:dcM,dc:dc,tx:tx,total:base+tx};
+    var sub=cartSub(),pd=Math.min(cartPd(),sub),net=sub-pd,mp=memberPct(),md=Math.round(net*mp/100),net2=net-md,dcM=discAmt(net2),dc=pd+md+dcM,base=sub-dc,tx=Math.round(base*taxPct()/100);
+    return {sub:sub,pd:pd,net:net,net2:net2,md:md,mp:mp,dcM:dcM,dc:dc,tx:tx,total:base+tx};
   }
   var cartTotal=function(){return cartCalc().total;};
   function adjRows(x){
     var o=[];
     if(x&&(x.dc||x.tx)){
       o.push(['Subtotal','Rp '+fmt(x.sub)]);
-      if(x.dc)o.push(['Diskon','- Rp '+fmt(x.dc)]);
+      if(x.dc-(x.md||0)>0)o.push(['Diskon','- Rp '+fmt(x.dc-(x.md||0))]);
+      if(x.md)o.push(['Diskon member'+(x.mp?' '+x.mp+'%':''),'- Rp '+fmt(x.md)]);
       if(x.tx)o.push(['PPN'+(x.tp?' '+x.tp+'%':''),'Rp '+fmt(x.tx)]);
     }
     return o;
@@ -1058,9 +1061,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     $('#discBox').hidden=!showD;
     document.querySelectorAll('[data-act="discMode"]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.m===S.disc.m));});
     $('#discUnit').textContent=S.disc.m==='pct'?'%':'Rp';
-    var wanted=discWanted(cc.net);
+    var wanted=discWanted(cc.net2);
     $('#discErr').textContent=(showD&&!isAdminU()&&wanted>cc.dcM)?('Diskon maksimal kasir '+maxDiscPct()+'% dari subtotal ('+rp(cc.dcM)+').'):'';
-    $('#sumBox').innerHTML=(cc.dc||cc.tx)?adjRows({sub:cc.sub,dc:cc.dc,tx:cc.tx,tp:taxPct()}).map(function(r){return sumRow(r[0],r[1],'');}).join(''):'';
+    $('#sumBox').innerHTML=(cc.dc||cc.tx)?adjRows({sub:cc.sub,dc:cc.dc,tx:cc.tx,tp:taxPct(),md:cc.md,mp:cc.mp}).map(function(r){return sumRow(r[0],r[1],'');}).join(''):'';
     $('#clearBtn').hidden=!lines.length;
     renderHoldRow();
     $('#cartSub').textContent=lines.length?cartCount()+' item':'Pesanan baru';
@@ -1080,6 +1083,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function renderPay(){
     if(S.method==='kasbon'&&!kbOn())S.method='tunai';
+    if(S.mbSel&&!mbOn()){S.mbSel='';var mbx=$('#mbIn');if(mbx)mbx.value='';}
     var total=cartTotal(),has=cartLines().length>0,tunai=S.method==='tunai',kasbon=S.method==='kasbon';
     (function(){var mk=$('#mKb'),sg=$('#methSeg');if(mk)mk.hidden=!kbOn();if(sg)sg.classList.toggle('kb4',kbOn());})();
     document.querySelectorAll('[data-act="method"]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.method===S.method));});
@@ -1207,7 +1211,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var sale={id:'s'+t.getTime().toString(36)+Math.random().toString(36).slice(2,4),t:t.toISOString(),
       items:lines.map(function(l){var it={n:l.p.name,p:l.p.price,q:l.q,i:l.p._base||l.p.id};if(l.p._k){it.k=l.p._k;}if(hasCost(l.p))it.c=+l.p.cost;var ld=lineDisc(l.p,l.q);if(ld>0){it.d=ld;it.dm=(l.p.dm==='pct')?'pct':'rp';if(it.dm==='pct')it.dv=Math.min(Number(l.p.dv)||0,100);it.du=pdUnit(l.p);it.dq=pdQty(l.p,l.q);}return it;}),total:total,method:S.method};
     var cc=cartCalc();
-    if(cc.dc||cc.tx){sale.sub=cc.sub;sale.dc=cc.dc;sale.tx=cc.tx;sale.tp=taxPct();}
+    if(cc.dc||cc.tx){sale.sub=cc.sub;sale.dc=cc.dc;sale.tx=cc.tx;sale.tp=taxPct();if(cc.md){sale.md=cc.md;sale.mp=cc.mp;}}
     sale.sh=ash.id;sale.ku=ash.k;sale.kn=me().n;
     var mbS=S.mbSel?mbById(S.mbSel):null;if(mbS)sale.mb={id:mbS.id,n:mbS.n};
     if(S.method==='tunai'){sale.cash=S.cash;sale.change=S.cash-total;}
@@ -1555,15 +1559,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function renderMbStat(){
     var el=$('#mbStat');if(!el)return;
     var m=S.mbSel?mbById(S.mbSel):null;
-    el.textContent=m?('Member: '+m.n+(m.ph?' · '+m.ph:'')):'';
+    var rw=$('#mbRow');if(rw)rw.hidden=!mbOn();
+    el.textContent=m?('Member: '+m.n+(m.ph?' · '+m.ph:'')+(mbPctOf(m)?' · diskon '+mbPctOf(m)+'%':'')):'';
     var dl=$('#mbDl');
     if(dl){var o=mbAll().map(function(x){return '<option value="'+esc(x.n)+'" label="'+esc(x.ph||'')+'">';}).join('');if(dl.dataset.s!==o){dl.innerHTML=o;dl.dataset.s=o;}}
   }
   function mbPick(txt){
     var m=mbFind(txt);
     S.mbSel=m?m.id:'';
+    if(!mbOn()){S.mbSel='';return;}
     if(m&&S.method==='kasbon'&&!S.kbName){S.kbName=m.n;var ki=$('#kbNm');if(ki)ki.value=m.n;}
-    renderMbStat();renderPay();
+    renderMbStat();renderCart();
   }
   function renderMember(){
     if(S.tab!=='member'||!can('member'))return;
@@ -1574,7 +1580,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     $('#mbList').innerHTML=rows.length?rows.map(function(r){
       var ld=r.st.last?new Date(r.st.last):null;
       return '<div class="erow" data-act="mbOpen" data-id="'+esc(r.m.id)+'" style="cursor:pointer"><div class="einfo"><div class="en">'+esc(r.m.n)+'</div>'
-        +'<div class="sub">'+(r.m.ph?esc(r.m.ph)+' · ':'')+r.st.trx+' transaksi'+(ld?' · terakhir '+esc(shortDate(ld)):'')+'</div></div>'
+        +'<div class="sub">'+(r.m.ph?esc(r.m.ph)+' · ':'')+(mbPctOf(r.m)?'diskon '+mbPctOf(r.m)+'% · ':'')+r.st.trx+' transaksi'+(ld?' · terakhir '+esc(shortDate(ld)):'')+'</div></div>'
         +'<b class="ea">'+rp(r.st.total)+'</b><button class="btn small" type="button" data-act="mbOpen" data-id="'+esc(r.m.id)+'">Lihat</button></div>';
     }).join(''):'<div class="empty">'+(all.length?'Tidak ada member yang cocok.':'Belum ada member. Ketuk Tambah member.')+'</div>';
   }
@@ -1584,7 +1590,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     S.mbEdit=id||'';S.kbMode='mb';
     var h='<div class="modal"><h2 id="kbTitle">'+(m?'Member':'Member baru')+'</h2>'
       +lgField('mbN','Nama','maxlength="40" value="'+esc(m?m.n:(pre||''))+'"')
-      +lgField('mbP','Nomor HP (boleh kosong)','maxlength="16" inputmode="tel" value="'+esc(m?(m.ph||''):'')+'"');
+      +lgField('mbP','Nomor HP (boleh kosong)','maxlength="16" inputmode="tel" value="'+esc(m?(m.ph||''):'')+'"')
+      +(isAdmin()?lgField('mbD','Diskon member % (kosong = ikut diskon umum '+mbDefPct()+'%)','maxlength="3" inputmode="numeric" value="'+((m&&m.d!==undefined&&m.d!==null&&m.d!=='')?esc(m.d):'')+'"'):'');
     if(m){
       var st=mbStats(m.id);
       var ls=st.sales.slice(-6).reverse().map(function(x){var d=new Date(x.s.t);return '<p class="hint" style="margin:2px 0">'+esc(shortDate(d)+' '+tm(d))+' · struk #'+esc(saleNo(x.s))+' · '+rp(x.s.total)+' ('+esc(mLabel(x.s.method))+')</p>';}).join('');
@@ -1604,6 +1611,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(dup){kbErr('Nama itu sudah dipakai member lain. Tambahkan pembeda, misalnya nama belakang.');return;}
     var old=S.mbEdit?mbById(S.mbEdit):null;
     var rec={id:old?old.id:newId('m'),n:n,ph:ph,t:old?old.t:new Date().toISOString()};
+    if(isAdmin()){var dv=(($('#mbD')||{}).value||'').replace(/\D/g,'');if(dv!=='')rec.d=Math.min(100,parseInt(dv,10));}else if(old&&old.d!==undefined)rec.d=old.d;
     S.kbBusy=true;
     try{
       await data.saveMember(rec);
@@ -1621,6 +1629,32 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     S.mbDelArm=false;
     try{await data.deleteMember(S.mbEdit);if(S.mbSel===S.mbEdit){S.mbSel='';var mi=$('#mbIn');if(mi)mi.value='';}kbClose();renderMember();renderMbStat();toast('Member dihapus. Riwayat belanjanya tetap tersimpan.');}
     catch(e){fail(e);}
+  }
+
+  /* ---------- Pengaturan member dan diskon member ---------- */
+  function mbOn(){
+    if(S.store&&(S.store.mbOn===1||S.store.mbOn==='1'))return true;
+    if(S.store&&(S.store.mbOn===0||S.store.mbOn==='0'))return false;
+    return mbAll().length>0;
+  }
+  function mbDefPct(){return clampN(S.store&&S.store.mbd,0,100);}
+  function mbPctOf(m){
+    if(!m)return 0;
+    if(m.d!==undefined&&m.d!==null&&m.d!=='')return clampN(m.d,0,100);
+    return mbDefPct();
+  }
+  function memberPct(){
+    if(!mbOn()||!S.mbSel)return 0;
+    return mbPctOf(mbById(S.mbSel));
+  }
+  function renderMbSet(){
+    var el=$('#mbBox');if(!el)return;
+    var on=mbOn();
+    el.innerHTML='<label class="lbl" style="margin-top:0">Fitur member</label><div class="pick-row"><button class="chip" type="button" data-act="mbSw" data-v="1" aria-pressed="'+on+'">Aktif</button><button class="chip" type="button" data-act="mbSw" data-v="0" aria-pressed="'+(!on)+'">Mati</button></div>'
+      +'<p class="hint" style="margin:6px 0 0">Kalau Mati, tab Member dan kolom Member di kasir hilang. Data member yang sudah ada tidak terhapus.</p>'
+      +(on?'<div class="form-row" style="margin-top:12px"><label class="lbl" for="mbDef">Diskon member umum (%)</label><div class="price-in"><span>%</span><input id="mbDef" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0 = tanpa diskon" value="'+(mbDefPct()||'')+'"></div>'
+        +'<div class="modal-actions" style="margin-top:8px"><button class="btn primary" type="button" data-act="mbDefOk">Simpan diskon</button></div>'
+        +'<p class="hint" style="margin:6px 0 0">Diskon ini otomatis berlaku untuk semua member. Kalau satu member perlu diskon lain, atur di tab Member (Lihat, lalu isi Diskon member). Diskon tampil sebagai "Diskon member" di struk, dihitung setelah diskon produk.</p></div>':'');
   }
 
   /* ---------- Cari di riwayat ---------- */
@@ -2432,7 +2466,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
     adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',thAcc:'accounts',rsAsk:'accounts',shOn:'accounts',shNew:'accounts',shQr:'accounts',shStk:'accounts',shBlk:'accounts',rsGo:'accounts',rsBk:'accounts',stkAdd:'products',stkQ:'products',stkOk:'products',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
-    mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
+    mbSw:'accounts',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
     kbPw:'sell',kbCode:'sell',kbMon:'sell',kbPwOk:'sell',kbCodeOk:'sell',kbClose:'sell',kbOpen:'kasbon',kbAll:'kasbon',kbPayOk:'kasbon',kbPm:'kasbon',kbFull:'kasbon',kbBack:'kasbon',
     kbSw:'accounts',kbGen:'accounts',kbGenOk:'accounts',kbDelCodes:'accounts',shKb:'accounts',kbCopy:'accounts',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
@@ -2449,7 +2483,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function can(p){var u=me();return !!(u&&PERMS[u.r].indexOf(p)>=0);}
   function need(p){if(!can(p))forbid();}
   function isAdmin(){var u=me();return !!u&&u.r==='admin';}
-  function tabOk(t){return !!TAB_PERM[t]&&can(TAB_PERM[t]);}
+  function tabOk(t){if(t==='member'&&!mbOn())return false;return !!TAB_PERM[t]&&can(TAB_PERM[t]);}
   function norm(v){return String(v||'').trim().toLowerCase();}
   function validUser(u){return /^[a-z0-9._-]{3,20}$/.test(u);}
   function validSecret(p){return typeof p==='string'&&p.length>=4&&p.length<=32;}
@@ -3165,7 +3199,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     location.reload();
   }
   function renderBk(){
-    renderRs();renderTh();renderSh();renderKbSet();
+    renderRs();renderTh();renderSh();renderMbSet();renderKbSet();
     var el=$('#bkBox');if(!el)return;
     el.innerHTML='<p class="hint" style="margin:0 0 10px">Simpan semua data (produk, transaksi, laporan, akun) ke satu file di HP. '+esc(bkLastText())+'</p>'
       +'<div class="modal-actions"><button class="btn primary grow" type="button" data-act="bkSave">Cadangkan data</button>'
@@ -3632,6 +3666,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'shiftDone':shDone();break;
       case 'shiftView':var vs=S.shifts[id];if(vs)shDlg('view',vs);break;
       case 'shiftCopy':if(lastShift)copyText(shiftText(lastShift),'Ringkasan shift disalin.');break;
+      case 'mbSw':data.saveSettings({mbOn:b.dataset.v==='1'?1:0}).then(function(){if(b.dataset.v!=='1'){S.mbSel='';var x=$('#mbIn');if(x)x.value='';}renderMbSet();renderChrome();renderPay();renderCart();}).catch(fail);break;
+      case 'mbDefOk':(function(){var v=Math.min(100,parseInt((($('#mbDef')||{}).value||'').replace(/\D/g,''),10)||0);data.saveSettings({mbd:v}).then(function(){renderMbSet();renderCart();toast('Diskon member umum disimpan: '+v+'%.');}).catch(fail);})();break;
       case 'mbOpen':mbDlg(id);break;
       case 'mbAdd':mbDlg('');break;
       case 'mbNew':mbDlg('',($('#mbIn')||{}).value||'');break;
@@ -3844,6 +3880,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       var dv=parseInt(t.value.replace(/\D/g,''),10)||0;
       if(S.disc.m==='pct')dv=Math.min(dv,100);
       S.disc.v=dv;t.value=dv?(S.disc.m==='pct'?String(dv):fmt(dv)):'';renderCart();
+    }else if(t.id==='mbD'||t.id==='mbDef'){var dn=t.value.replace(/\D/g,'').slice(0,3);if(dn&&+dn>100)dn='100';t.value=dn;
     }else if(t.id==='mbIn'){mbPick(t.value);
     }else if(t.id==='mbQ'){S.mbQ=t.value;renderMember();
     }else if(t.id==='hq'){S.hq=t.value;renderHistory();
