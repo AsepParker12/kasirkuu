@@ -543,6 +543,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   <!-- RIWAYAT -->
   <section id="view-member" hidden aria-labelledby="tab-member">
     <div class="section-head"><h2>Member</h2><button class="btn primary" type="button" data-act="mbAdd">Tambah member</button></div>
+    <div class="note" id="mbOffNote" hidden><p><b>Fitur member sedang mati.</b> Kasir tidak bisa menambah atau memakai member, dan diskon member tidak berlaku. Hanya admin yang masih bisa mengatur daftar ini. Nyalakan di tab Akun, bagian Member.</p></div>
+    <div class="panel" id="mbBulk" hidden></div>
     <div class="stats" id="mbSum"></div>
     <div class="date-row"><input class="field" id="mbQ" placeholder="Cari nama atau nomor HP" autocomplete="off"></div>
     <div class="plist" id="mbList"></div>
@@ -636,7 +638,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='43';
+  var LS='kasirku:v1',APP_VER='44';
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -792,7 +794,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(!db)saveLocal();
     },
     saveMember:async function(rec){
-      need('member');if(!mbOn())forbid();
+      need('member');if(!mbOn()&&!isAdmin())forbid();
       var base=S.store;
       if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
       var list=(Array.isArray(base.mbr)?base.mbr:[]).slice(),i=list.findIndex(function(x){return x.id===rec.id;});
@@ -801,6 +803,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(db){await db.doc('settings/store').set(next);}
       S.store=next;
       if(!db)saveLocal();
+    },
+    setAllMemberDisc:async function(pct){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var list=(Array.isArray(base.mbr)?base.mbr:[]).map(function(m){var o=Object.assign({},m);delete o.d;return o;});
+      var next=Object.assign({},base,{mbr:list,mbd:pct});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+      return list.length;
     },
     deleteMember:async function(id){
       need('products');
@@ -862,6 +875,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(sale.method==='kasbon'){
         if(!kbOn()||!sale.kb||!kbName(sale.kb.n)||!(isAdmin()||kbTokOk(sale.kb.n,sale.total)))forbid();
       }
+      if(sale.mb&&(!mbOn()||!mbById(sale.mb.id)))forbid();
+      if(sale.md&&!sale.mb)forbid();
       var key=dayKey(new Date(sale.t));
       var cur=await ensureDay(key);
       var sales=cur.concat([sale]);
@@ -1213,7 +1228,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var cc=cartCalc();
     if(cc.dc||cc.tx){sale.sub=cc.sub;sale.dc=cc.dc;sale.tx=cc.tx;sale.tp=taxPct();if(cc.md){sale.md=cc.md;sale.mp=cc.mp;}}
     sale.sh=ash.id;sale.ku=ash.k;sale.kn=me().n;
-    var mbS=S.mbSel?mbById(S.mbSel):null;if(mbS)sale.mb={id:mbS.id,n:mbS.n};
+    var mbS=(S.mbSel&&mbOn())?mbById(S.mbSel):null;if(mbS)sale.mb={id:mbS.id,n:mbS.n};
     if(S.method==='tunai'){sale.cash=S.cash;sale.change=S.cash-total;}
     if(S.method==='kasbon'){var kn0=kbName(S.kbName),kex=kbDebts()[kbKey(kn0)];if(kex)kn0=kex.n;sale.kb={n:kn0,ap:isAdmin()?'akun admin':S.kbTok.ap,by:isAdmin()?me().n:S.kbTok.by};}
     try{
@@ -1575,6 +1590,19 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(S.tab!=='member'||!can('member'))return;
     var all=mbAll(),q=String(S.mbQ||'').trim().toLowerCase(),qd=q.replace(/\D/g,'');
     $('#mbSum').innerHTML='<div class="stat"><small>Jumlah member</small><b>'+all.length+'</b></div>';
+    $('#mbOffNote').hidden=mbOn();
+    var bk=$('#mbBulk');
+    if(bk){
+      bk.hidden=!isAdmin();
+      var sig=String(mbDefPct())+'|'+all.length+'|'+all.filter(function(m){return m.d!==undefined&&m.d!==null&&m.d!=='';}).length;
+      if(isAdmin()&&bk.dataset.s!==sig){
+        var ov=all.filter(function(m){return m.d!==undefined&&m.d!==null&&m.d!=='';}).length;
+        bk.dataset.s=sig;
+        bk.innerHTML='<label class="lbl" for="mbAll" style="margin-top:0">Diskon untuk semua member sekaligus (%)</label><div class="price-in"><span>%</span><input id="mbAll" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="Contoh: 5" value="'+(mbDefPct()||'')+'"></div>'
+          +'<div class="modal-actions" style="margin-top:8px"><button class="btn primary" type="button" data-act="mbAllOk">Terapkan ke semua member</button></div>'
+          +'<p class="hint" style="margin:6px 0 0">Sekarang diskon member '+mbDefPct()+'%. Tombol ini mengganti diskon semua member sekaligus, termasuk yang sebelumnya diatur sendiri-sendiri'+(ov?' ('+ov+' member punya diskon sendiri)':'')+'. Isi 0 untuk meniadakan diskon. Diskon satu member tetap bisa diubah lewat tombol Lihat di bawah.</p>';
+      }
+    }
     var rows=all.map(function(m){return {m:m,st:mbStats(m.id)};}).filter(function(r){return !q||r.m.n.toLowerCase().indexOf(q)>=0||(qd&&String(r.m.ph||'').indexOf(qd)>=0);})
       .sort(function(a,b){return b.st.total-a.st.total||a.m.n.localeCompare(b.m.n);});
     $('#mbList').innerHTML=rows.length?rows.map(function(r){
@@ -1651,10 +1679,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var el=$('#mbBox');if(!el)return;
     var on=mbOn();
     el.innerHTML='<label class="lbl" style="margin-top:0">Fitur member</label><div class="pick-row"><button class="chip" type="button" data-act="mbSw" data-v="1" aria-pressed="'+on+'">Aktif</button><button class="chip" type="button" data-act="mbSw" data-v="0" aria-pressed="'+(!on)+'">Mati</button></div>'
-      +'<p class="hint" style="margin:6px 0 0">Kalau Mati, tab Member dan kolom Member di kasir hilang. Data member yang sudah ada tidak terhapus.</p>'
+      +'<p class="hint" style="margin:6px 0 0">Kalau Mati, kasir tidak bisa menambah atau memakai member (kolom Member dan tab Member hilang dari akun kasir), dan diskon member tidak berlaku. Admin tetap bisa mengatur daftar member. Data member tidak terhapus.</p>'
       +(on?'<div class="form-row" style="margin-top:12px"><label class="lbl" for="mbDef">Diskon member umum (%)</label><div class="price-in"><span>%</span><input id="mbDef" inputmode="numeric" maxlength="3" autocomplete="off" placeholder="0 = tanpa diskon" value="'+(mbDefPct()||'')+'"></div>'
         +'<div class="modal-actions" style="margin-top:8px"><button class="btn primary" type="button" data-act="mbDefOk">Simpan diskon</button></div>'
-        +'<p class="hint" style="margin:6px 0 0">Diskon ini otomatis berlaku untuk semua member. Kalau satu member perlu diskon lain, atur di tab Member (Lihat, lalu isi Diskon member). Diskon tampil sebagai "Diskon member" di struk, dihitung setelah diskon produk.</p></div>':'');
+        +'<p class="hint" style="margin:6px 0 0">Diskon ini otomatis berlaku untuk semua member. Mau mengubah diskon semua member sekaligus (termasuk yang diatur sendiri), pakai tombol "Terapkan ke semua member" di tab Member. Kalau satu member perlu diskon lain, atur di tab Member (Lihat, lalu isi Diskon member). Diskon tampil sebagai "Diskon member" di struk, dihitung setelah diskon produk.</p></div>':'');
   }
 
   /* ---------- Cari di riwayat ---------- */
@@ -2466,7 +2494,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
     adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',thAcc:'accounts',rsAsk:'accounts',shOn:'accounts',shNew:'accounts',shQr:'accounts',shStk:'accounts',shBlk:'accounts',rsGo:'accounts',rsBk:'accounts',stkAdd:'products',stkQ:'products',stkOk:'products',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
-    mbSw:'accounts',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
+    mbSw:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
     kbPw:'sell',kbCode:'sell',kbMon:'sell',kbPwOk:'sell',kbCodeOk:'sell',kbClose:'sell',kbOpen:'kasbon',kbAll:'kasbon',kbPayOk:'kasbon',kbPm:'kasbon',kbFull:'kasbon',kbBack:'kasbon',
     kbSw:'accounts',kbGen:'accounts',kbGenOk:'accounts',kbDelCodes:'accounts',shKb:'accounts',kbCopy:'accounts',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
@@ -2483,7 +2511,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function can(p){var u=me();return !!(u&&PERMS[u.r].indexOf(p)>=0);}
   function need(p){if(!can(p))forbid();}
   function isAdmin(){var u=me();return !!u&&u.r==='admin';}
-  function tabOk(t){if(t==='member'&&!mbOn())return false;return !!TAB_PERM[t]&&can(TAB_PERM[t]);}
+  function tabOk(t){if(t==='member'&&!mbOn()&&!isAdmin())return false;return !!TAB_PERM[t]&&can(TAB_PERM[t]);}
   function norm(v){return String(v||'').trim().toLowerCase();}
   function validUser(u){return /^[a-z0-9._-]{3,20}$/.test(u);}
   function validSecret(p){return typeof p==='string'&&p.length>=4&&p.length<=32;}
@@ -3668,6 +3696,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'shiftCopy':if(lastShift)copyText(shiftText(lastShift),'Ringkasan shift disalin.');break;
       case 'mbSw':data.saveSettings({mbOn:b.dataset.v==='1'?1:0}).then(function(){if(b.dataset.v!=='1'){S.mbSel='';var x=$('#mbIn');if(x)x.value='';}renderMbSet();renderChrome();renderPay();renderCart();}).catch(fail);break;
       case 'mbDefOk':(function(){var v=Math.min(100,parseInt((($('#mbDef')||{}).value||'').replace(/\D/g,''),10)||0);data.saveSettings({mbd:v}).then(function(){renderMbSet();renderCart();toast('Diskon member umum disimpan: '+v+'%.');}).catch(fail);})();break;
+      case 'mbAllOk':(function(){var raw=(($('#mbAll')||{}).value||'').replace(/\D/g,'');if(raw===''){toast('Isi persen diskonnya dulu (isi 0 untuk meniadakan).');return;}var v=Math.min(100,parseInt(raw,10)||0);data.setAllMemberDisc(v).then(function(n){renderMember();renderMbSet();renderCart();toast('Diskon member '+v+'% diterapkan ke '+n+' member.');}).catch(fail);})();break;
       case 'mbOpen':mbDlg(id);break;
       case 'mbAdd':mbDlg('');break;
       case 'mbNew':mbDlg('',($('#mbIn')||{}).value||'');break;
@@ -3880,7 +3909,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       var dv=parseInt(t.value.replace(/\D/g,''),10)||0;
       if(S.disc.m==='pct')dv=Math.min(dv,100);
       S.disc.v=dv;t.value=dv?(S.disc.m==='pct'?String(dv):fmt(dv)):'';renderCart();
-    }else if(t.id==='mbD'||t.id==='mbDef'){var dn=t.value.replace(/\D/g,'').slice(0,3);if(dn&&+dn>100)dn='100';t.value=dn;
+    }else if(t.id==='mbD'||t.id==='mbDef'||t.id==='mbAll'){var dn=t.value.replace(/\D/g,'').slice(0,3);if(dn&&+dn>100)dn='100';t.value=dn;
     }else if(t.id==='mbIn'){mbPick(t.value);
     }else if(t.id==='mbQ'){S.mbQ=t.value;renderMember();
     }else if(t.id==='hq'){S.hq=t.value;renderHistory();
