@@ -59,6 +59,7 @@
 :root[data-accent="orange"] .dbadge{background:#FFC83D;color:#3A2200}
 
 *{box-sizing:border-box}
+html,body{overscroll-behavior-y:none}
 body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--font-ui);-webkit-font-smoothing:antialiased}
 button,input{font:inherit;color:inherit}
 button{cursor:pointer}
@@ -638,7 +639,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='51',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='52',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -653,11 +654,15 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   themeApply();
   (function(){var v=document.getElementById('lgVer');if(v)v.textContent='v'+APP_VER;})();
+  function stayOn(){try{return localStorage.getItem('kasirku:stay')==='1';}catch(e){return false;}}
+  function stayPut(id){try{if(id&&stayOn())localStorage.setItem('kasirku:sess',id);else localStorage.removeItem('kasirku:sess');}catch(e){}}
   function renderTh(){
     var el=$('#thBox');if(!el)return;
     var a=accGet(),m=modeGet();
     el.innerHTML='<p class="hint" style="margin:0 0 10px">Pilihan ini berlaku untuk layar ini saja.</p>'
-      +'<label class="lbl">Warna</label><div class="pick-row">'+Object.keys(ACC).map(function(k){return '<button class="chip" type="button" data-act="thAcc" data-v="'+k+'" aria-pressed="'+(a===k)+'">'+ACC[k][0]+'</button>';}).join('')+'</div>';
+      +'<label class="lbl">Warna</label><div class="pick-row">'+Object.keys(ACC).map(function(k){return '<button class="chip" type="button" data-act="thAcc" data-v="'+k+'" aria-pressed="'+(a===k)+'">'+ACC[k][0]+'</button>';}).join('')+'</div>'
+      +'<label class="lbl">Tetap masuk di perangkat ini</label><div class="pick-row"><button class="chip" type="button" data-act="stayMode" data-v="1" aria-pressed="'+stayOn()+'">Ya</button><button class="chip" type="button" data-act="stayMode" data-v="0" aria-pressed="'+!stayOn()+'">Tidak</button></div>'
+      +'<p class="hint" style="margin:6px 0 0">Kalau Ya, aplikasi tidak meminta masuk lagi setelah dimuat ulang atau dibuka kembali. Siapa pun yang memegang perangkat ini langsung memakai akun yang terakhir masuk, jadi nyalakan hanya untuk perangkat yang dijaga. Keluar dari akun (Keluar atau Selesai Bertugas) tetap menghapus ini. Berlaku untuk perangkat ini saja.</p>';
   }
 
   /* ---------- Penyimpanan ---------- */
@@ -2506,7 +2511,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
     adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',thAcc:'accounts',rsAsk:'accounts',shOn:'accounts',shNew:'accounts',shQr:'accounts',shStk:'accounts',shBlk:'accounts',rsGo:'accounts',rsBk:'accounts',stkAdd:'products',stkQ:'products',stkOk:'products',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
-    mbSw:'accounts',hbMode:'accounts',hbNew:'accounts',hbJoin:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
+    mbSw:'accounts',stayMode:'accounts',hbMode:'accounts',hbNew:'accounts',hbJoin:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
     kbPw:'sell',kbCode:'sell',kbMon:'sell',kbPwOk:'sell',kbCodeOk:'sell',kbClose:'sell',kbOpen:'kasbon',kbAll:'kasbon',kbPayOk:'kasbon',kbPm:'kasbon',kbFull:'kasbon',kbBack:'kasbon',
     kbSw:'accounts',kbGen:'accounts',kbGenOk:'accounts',kbDelCodes:'accounts',shKb:'accounts',kbCopy:'accounts',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
@@ -2723,7 +2728,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function startSession(u){
     S.kbTok=null;S.kbReq=null;S.kbName='';S.mbSel='';S.hq='';(function(){var a=$('#mbIn'),b=$('#hq');if(a)a.value='';if(b)b.value='';})();
-    S.uid=u.id;S.lmsg='';S.lmode='login';
+    S.uid=u.id;S.lmsg='';S.lmode='login';stayPut(u.id);
     S.tab=u.r==='admin'?'dash':'kasir';
     S.cart={};S.cash=0;S.disc={m:'rp',v:0};S.histUser='';S.histKey=todayKey();S.unknown=null;
     lastAct=Date.now();loginKey='';
@@ -2733,6 +2738,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     toast('Masuk sebagai '+u.n+'.');
   }
   function endSession(msg){
+    stayPut('');
     S.uid='';S.cart={};S.cash=0;S.disc={m:'rp',v:0};S.editing=null;S.rf=null;S.unknown=null;S.lmode='login';S.lmsg=msg||'';
     $('#cashIn').value='';
     ['editor','receipt','shiftDlg','acDlg','rfDlg'].forEach(function(id){var el=$('#'+id);el.hidden=true;el.innerHTML='';});
@@ -3773,6 +3779,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'shNew':(function(){var c=shCfg();c.code=shRand(8);c.pin=shPin();shSave(c);renderSh();shTick();toast('Kode baru dibuat. Layar lain perlu memasukkan kode baru.');})();break;
       case 'shBlk':(function(){var c=shCfg();c.blk=b.dataset.v==='1';shSave(c);renderSh();})();break;
       case 'shStk':(function(){var c=shCfg();c.rstk=b.dataset.v==='1';shSave(c);renderSh();})();break;
+      case 'stayMode':try{if(b.dataset.v==='1'){localStorage.setItem('kasirku:stay','1');stayPut(S.uid);}else{localStorage.removeItem('kasirku:stay');stayPut('');}}catch(e){}renderTh();break;
       case 'thAcc':try{localStorage.setItem(AC_KEY,b.dataset.v);}catch(e){}themeApply();renderTh();break;
       case 'rsAsk':rsAsk(b.dataset.v);break;
       case 'rsGo':rsGo();break;
@@ -4062,6 +4069,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       loadLocal();S.mode='local';S.daysLoaded=true;S.storeLoaded=true;
     }
     renderAll();
+    if(!db&&stayOn()){try{var sid=localStorage.getItem('kasirku:sess'),su=sid&&users().find(function(x){return x.id===sid;});if(su&&su.a!==0&&su.h&&PERMS[su.r])startSession(su);}catch(e){}}
   }
   /* ---------- Layar pelanggan dan pantau (WebRTC antar HP, tanpa menyimpan data di server) ---------- */
   /* Pembuat kode QR: QRCode for JavaScript, (c) 2009 Kazuhiko Arase, lisensi MIT (lewat paket qrcode-terminal). */
