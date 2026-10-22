@@ -638,7 +638,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='49',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='50',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -2637,6 +2637,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         +err+'<button class="btn primary block" type="button" id="lgGo" data-act="lgOk">Masuk</button>'
         +'<p class="hint" style="margin-top:12px">Admin dan kasir masuk di sini dengan akun masing-masing. Akun kasir dibuat oleh Admin di tab Akun.</p>'
         +'<button class="pin-link" type="button" data-act="lgForgot">Lupa password Admin?</button>'
+        +(hbRole()==='sat'?'<p class="hint" id="hbLgStat" style="margin:10px 0 0">'+esc(hbStatTxt())+'</p><button class="pin-link" type="button" data-act="lgHubOff" style="display:block;margin-top:8px">Putus dari pusat</button>':'')
         +(shCan()?'<button class="pin-link" type="button" data-act="lgView" style="display:block;margin-top:8px">Layar pelanggan / Pantau</button>':'');
     }
     $('#lgBox').innerHTML=h;
@@ -3700,6 +3701,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       switch(a){
         case 'lgOk':lgSubmit();break;
         case 'lgView':vwForm();break;
+        case 'lgHubOff':hbLeave();break;
         case 'lgHub':S.lmode='hub';S.lmsg='';loginKey='';renderLogin();break;
         case 'lgHubGo':(function(){var er=hbJoinGo(($('#hbCode')||{}).value,($('#hbPin')||{}).value);var e=$('#hbErr');if(e)e.textContent=er||'Menyambung ke pusat…';})();break;
         case 'lgForgot':S.lmode='forgot';S.lmsg='';loginKey='';renderLogin();break;
@@ -6122,7 +6124,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(HS.sig)HS.sig.send({type:'OFFER',dst:dst,payload:{sdp:{type:o.type,sdp:o.sdp},type:'data',connectionId:cid,label:cid,reliable:true,serialization:'json',browser:'chrome'}});
     });}).catch(function(){satRetry();});
     clearTimeout(HS.dialT);
-    HS.dialT=setTimeout(function(){if(!HS.up){HS.state='offline';hbUi();satRetry(1500);}},15000);
+    HS.dialT=setTimeout(function(){if(!HS.up){HS.state='offline';hbUi();satRetry(1500);}},8000);
   }
   function satOnMsg(m){
     var p=m.payload||{};
@@ -6190,7 +6192,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var n=hbQ().length;
     return HS.up?'● Pusat':'○ Offline'+(n?' (antre '+n+')':'');
   }
-  function hbBadge(){var t=hbBdgTxt();return t?' · <span id="hbBdg">'+esc(t)+'</span>':'';}
+  function hbBdgOn(){var r=hbRole();return r==='hub'?!!HH.ready:(r==='sat'?!!HS.up:false);}
+  function hbBdgSt(){return hbBdgOn()?'color:#1B7F3B;font-weight:700':'';}
+  function hbBadge(){var t=hbBdgTxt();return t?' · <span id="hbBdg" style="'+hbBdgSt()+'">'+esc(t)+'</span>':'';}
   function hbStatTxt(){
     var c=hbCfg();if(!c)return '';
     if(c.role==='hub'){
@@ -6203,7 +6207,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function hbUi(){
     try{var s=$('#hbStat');if(s)s.textContent=hbStatTxt();var e=$('#hbErr');if(e&&S.lmode==='hub'&&HS.state!=='up')e.textContent=(HS.state==='deny'||HS.state==='offline')?hbStatTxt():'';}catch(x){}
-    try{var bd=$('#hbBdg');if(bd){var t2=hbBdgTxt();if(bd.textContent!==t2)bd.textContent=t2;}}catch(x){}
+    try{var bd=$('#hbBdg');if(bd){var t2=hbBdgTxt();if(bd.textContent!==t2)bd.textContent=t2;bd.setAttribute('style',hbBdgSt());}}catch(x){}
+    try{var lg=$('#hbLgStat');if(lg)lg.textContent=hbStatTxt();}catch(x){}
   }
   function renderHbSet(){
     var el=$('#hbBox');if(!el)return;
@@ -6239,9 +6244,16 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     satStart();hbUi();
     return '';
   }
+  function hbLeave(){
+    var n=hbQ().length;
+    if(!confirm((n?'Masih ada '+n+' transaksi yang belum terkirim ke pusat dan akan hilang. ':'')+'Perangkat ini akan diputus dari pusat dan semua data pusat di perangkat ini dihapus. Perangkat kembali ke tampilan awal. Lanjut?'))return;
+    hubStop();satClean();
+    try{[LS,HB_KEY,HQ_KEY,HD_KEY,'kasirku:rlog'].forEach(function(k){localStorage.removeItem(k);});}catch(e){}
+    location.reload();
+  }
   function hbOff(){
     var c=hbCfg();
-    if(c&&c.role==='sat'&&hbQ().length&&!confirm('Masih ada '+hbQ().length+' transaksi yang belum terkirim ke pusat. Kalau diputus sekarang, itu hilang. Lanjut putus?'))return;
+    if(c&&c.role==='sat'){hbLeave();return;}
     hubStop();satClean();hbSave(null);hbQPut([]);HS.state='';S.hbJoin=false;
     var el=$('#hbBox');if(el)el.dataset.s='';
     renderHbSet();renderChrome();
