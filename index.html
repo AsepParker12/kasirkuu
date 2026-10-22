@@ -496,6 +496,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     <div class="panel" id="mbBox"></div>
     <div class="section-head"><h2>Kasbon</h2></div>
     <div class="panel" id="kbBox"></div>
+    <div class="section-head"><h2>Banyak kasir (mode pusat)</h2></div>
+    <div class="panel" id="hbBox"></div>
     <div class="section-head"><h2>Layar pelanggan dan pantau</h2></div>
     <div class="panel" id="shBox"></div>
     <div class="section-head"><h2>Reset data</h2></div>
@@ -638,7 +640,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='44';
+  var LS='kasirku:v1',APP_VER='46',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -730,12 +732,20 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     },
     saveShift:async function(sh){
       var old=S.shifts[sh.id];
-      if(!old){need('shift.open');if(sh.k!==S.uid)forbid();}
+      if(!old){need('shift.open');if(!HB.rpc&&sh.k!==S.uid)forbid();}
       else if(old.k===S.uid)need('shift.close.own');
       else need('shift.close.any');
       if(db){await db.doc('shifts/'+sh.id).set(sh);}
       S.shifts[sh.id]=sh;
       if(!db)saveLocal();
+    },
+    addStock:async function(id,d){
+      if(!(can('sell')||can('products')))forbid();
+      var p=S.products.find(function(x){return x.id===id;});
+      if(!p)return;
+      var nx=Math.max(0,(+p.stock||0)+d);
+      if(db){await db.doc('products/'+id).update({stock:nx});}
+      else{p.stock=nx;saveLocal();}
     },
     setStock:async function(id,n){
       if(!(can('sell')||can('products')))forbid();
@@ -777,7 +787,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addRefund:async function(rf){
       need('refund.own');
       var sale=findSale(rf.sk,rf.sid);
-      if(!sale||!canSeeSale(sale))forbid();
+      if(!sale||(!HB.rpc&&!canSeeSale(sale)))forbid();
       var st=refundState(sale);
       if(!st.can)forbid();
       var rem=remainingByIndex(sale);
@@ -794,7 +804,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(!db)saveLocal();
     },
     saveMember:async function(rec){
-      need('member');if(!mbOn()&&!isAdmin())forbid();
+      need('member');if(!HB.rpc&&!mbOn()&&!isAdmin())forbid();
       var base=S.store;
       if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
       var list=(Array.isArray(base.mbr)?base.mbr:[]).slice(),i=list.findIndex(function(x){return x.id===rec.id;});
@@ -857,7 +867,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addKbPay:async function(rec){
       need('kasbon');
       var ms=myShift();
-      if(!ms||rec.sh!==ms.id||rec.ku!==S.uid)forbid();
+      if(!HB.rpc&&(!ms||rec.sh!==ms.id||rec.ku!==S.uid))forbid();
       var d=kbDebts()[kbKey(rec.n)];
       if(!d||!(rec.amt>0)||rec.amt>d.bal||['tunai','qris','transfer'].indexOf(rec.m)<0)forbid();
       var base=S.store;
@@ -871,9 +881,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addSale:async function(sale){
       need('sell');
       var ms=myShift();
-      if(!ms||sale.sh!==ms.id||sale.ku!==S.uid)forbid();
+      if(!HB.rpc&&(!ms||sale.sh!==ms.id||sale.ku!==S.uid))forbid();
       if(sale.method==='kasbon'){
-        if(!kbOn()||!sale.kb||!kbName(sale.kb.n)||!(isAdmin()||kbTokOk(sale.kb.n,sale.total)))forbid();
+        if(!kbOn()||!sale.kb||!kbName(sale.kb.n)||!(HB.rpc||isAdmin()||kbTokOk(sale.kb.n,sale.total)))forbid();
       }
       if(sale.mb&&(!mbOn()||!mbById(sale.mb.id)))forbid();
       if(sale.md&&!sale.mb)forbid();
@@ -1017,7 +1027,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       $('#view-'+t).hidden=!(ok&&S.tab===t);
     });
     $('#who').hidden=!u;
-    if(u)$('#who').innerHTML=esc(u.n)+' · '+(u.r==='admin'?'Admin':'Kasir')+(u.r==='admin'?' <button class="btn small" type="button" data-act="adminOut" style="margin-left:6px;min-height:32px;padding:2px 12px">Keluar</button>':'');
+    if(u)$('#who').innerHTML=esc(u.n)+' · '+(u.r==='admin'?'Admin':'Kasir')+hbBadge()+(u.r==='admin'?' <button class="btn small" type="button" data-act="adminOut" style="margin-left:6px;min-height:32px;padding:2px 12px">Keluar</button>':'');
     var si=$('#storeIn');if(document.activeElement!==si)si.value=(S.store&&S.store.name)||'';
     (function(){var el=$('#rfRsRow');if(el){var on=!(S.store&&(S.store.rfRs===0||S.store.rfRs==='0'));if(el.children.length===2){el.children[0].setAttribute('aria-pressed',String(on));el.children[1].setAttribute('aria-pressed',String(!on));}else el.innerHTML='<button class="chip" type="button" data-act="setRfRs" data-v="1" aria-pressed="'+on+'">Ya, otomatis kembali</button><button class="chip" type="button" data-act="setRfRs" data-v="0" aria-pressed="'+(!on)+'">Tidak kembali</button>';}})();
     [['setTax','tax'],['setMaxDisc','maxDisc'],['setLow','low']].forEach(function(x){var el=$('#'+x[0]);if(el&&document.activeElement!==el){var v=S.store&&S.store[x[1]];el.value=(v===undefined||v===null||v===0&&x[1]!=='low')?'':String(v);}});
@@ -2228,7 +2238,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       var id=lines[i].p._base||lines[i].p.id,q=lines[i].q*(lines[i].p._k||1);
       var cur=S.products.find(function(x){return x.id===id;});
       if(!cur||!hasStock(cur))continue;
-      try{await data.setStock(id,Math.max(0,cur.stock-q));}catch(e){bad++;}
+      try{await data.addStock(id,-q);}catch(e){bad++;}
     }
     renderGrid();renderProducts();
     if(bad)toast('Penjualan tersimpan, tapi stok belum berkurang.');
@@ -2494,7 +2504,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
     adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',thAcc:'accounts',rsAsk:'accounts',shOn:'accounts',shNew:'accounts',shQr:'accounts',shStk:'accounts',shBlk:'accounts',rsGo:'accounts',rsBk:'accounts',stkAdd:'products',stkQ:'products',stkOk:'products',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
-    mbSw:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
+    mbSw:'accounts',hbMode:'accounts',hbNew:'accounts',hbJoin:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
     kbPw:'sell',kbCode:'sell',kbMon:'sell',kbPwOk:'sell',kbCodeOk:'sell',kbClose:'sell',kbOpen:'kasbon',kbAll:'kasbon',kbPayOk:'kasbon',kbPm:'kasbon',kbFull:'kasbon',kbBack:'kasbon',
     kbSw:'accounts',kbGen:'accounts',kbGenOk:'accounts',kbDelCodes:'accounts',shKb:'accounts',kbCopy:'accounts',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
@@ -2508,7 +2518,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     return (u&&u.a!==0&&u.h&&PERMS[u.r])?u:null;
   }
   function forbid(){var e=new Error('forbidden');e.code='forbidden';throw e;}
-  function can(p){var u=me();return !!(u&&PERMS[u.r].indexOf(p)>=0);}
+  function can(p){if(HB.rpc)return true;var u=me();return !!(u&&PERMS[u.r].indexOf(p)>=0);}
   function need(p){if(!can(p))forbid();}
   function isAdmin(){var u=me();return !!u&&u.r==='admin';}
   function tabOk(t){if(t==='member'&&!mbOn()&&!isAdmin())return false;return !!TAB_PERM[t]&&can(TAB_PERM[t]);}
@@ -2586,7 +2596,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     ['.top','main','#cartBar'].forEach(function(q){var el=$(q);if(el)el.inert=on;});
     if(!on){loginKey='';return;}
     var legacy=!!(S.store&&S.store.pin&&S.store.pin.h);
-    var mode=!S.storeLoaded?'loading':(S.lmode==='code'?'code':(users().length===0?'setup':(S.lmode==='forgot'?'forgot':'login')));
+    var mode=!S.storeLoaded?'loading':(S.lmode==='hub'?'hub':S.lmode==='code'?'code':(users().length===0?'setup':(S.lmode==='forgot'?'forgot':'login')));
     var key=mode+'|'+legacy+'|'+(S.lmsg||'')+'|'+shopName();
     if(key===loginKey)return;
     loginKey=key;S.lcur=mode;
@@ -2603,7 +2613,12 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         +lgPw('lgPw','Password atau PIN (4 sampai 32 karakter)')
         +lgPw('lgPw2','Ulangi password atau PIN')
         +err+'<button class="btn primary block" type="button" id="lgGo" data-act="lgOk">Buat akun dan masuk</button>'
-        +(shCan()?'<button class="pin-link" type="button" data-act="lgView" style="display:block;margin-top:12px">Layar pelanggan / Pantau</button>':'');
+        +(shCan()?'<button class="pin-link" type="button" data-act="lgHub" style="display:block;margin-top:12px">Perangkat kasir? Sambung ke pusat</button><button class="pin-link" type="button" data-act="lgView" style="display:block;margin-top:12px">Layar pelanggan / Pantau</button>':'');
+    }else if(mode==='hub'){
+      h+='<h2 id="lgTitle">Sambung ke pusat</h2><p class="intro">Masukkan kode dan PIN dari tab Akun di perangkat pusat. Akun dan data toko akan dibawa dari sana.</p>'
+        +lgField('hbCode','Kode pusat (8 huruf/angka)','maxlength="9" autocapitalize="characters" placeholder="ABCD-EFGH"')
+        +lgField('hbPin','PIN pusat (4 angka)','maxlength="4" inputmode="numeric" placeholder="0000"')
+        +'<p class="hint pin-err" id="hbErr" role="alert"></p><div class="modal-actions"><button class="btn grow" type="button" data-act="lgBack">Kembali</button><button class="btn primary grow" type="button" data-act="lgHubGo">Sambungkan</button></div>';
     }else if(mode==='code'){
       h+='<h2 id="lgTitle">Simpan kode pemulihan</h2><p class="intro">Kalau lupa password Admin, kode ini dipakai untuk mereset. Kode tidak akan ditampilkan lagi. Catat atau foto, lalu simpan di tempat aman.</p>'
         +'<div class="rec-code" id="recCode">'+esc(S.lcode||'')+'</div>'
@@ -3227,7 +3242,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     location.reload();
   }
   function renderBk(){
-    renderRs();renderTh();renderSh();renderMbSet();renderKbSet();
+    renderRs();renderTh();renderSh();renderMbSet();renderKbSet();renderHbSet();
     var el=$('#bkBox');if(!el)return;
     el.innerHTML='<p class="hint" style="margin:0 0 10px">Simpan semua data (produk, transaksi, laporan, akun) ke satu file di HP. '+esc(bkLastText())+'</p>'
       +'<div class="modal-actions"><button class="btn primary grow" type="button" data-act="bkSave">Cadangkan data</button>'
@@ -3497,7 +3512,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(rec.rs){
         for(var i=0;i<rec.items.length;i++){
           var p=prodOfItem(rec.items[i]);
-          if(p&&hasStock(p)){try{await data.setStock(p.id,p.stock+rec.items[i].q*(rec.items[i].k||1));}catch(e){}}
+          if(p&&hasStock(p)){try{await data.addStock(p.id,rec.items[i].q*(rec.items[i].k||1));}catch(e){}}
         }
       }
       S.rf=null;$('#rfDlg').hidden=true;$('#rfDlg').innerHTML='';
@@ -3511,12 +3526,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
   /* ---------- Shift ---------- */
   var lastShift=null;
-  function activeShift(){
-    var f=null;
-    Object.keys(S.shifts).forEach(function(k){var s=S.shifts[k];if(!s.end&&(!f||s.start>f.start))f=s;});
+  function openShifts(){return Object.keys(S.shifts).map(function(k){return S.shifts[k];}).filter(function(x){return !x.end;});}
+  function myShift(){
+    var u=S.uid,f=null;if(!u)return null;
+    openShifts().forEach(function(x){if(x.k===u&&(!f||x.start>f.start))f=x;});
     return f;
   }
-  function myShift(){var a=activeShift();return (a&&S.uid&&a.k===S.uid)?a:null;}
+  function activeShift(){
+    var m=myShift();if(m)return m;
+    var f=null;openShifts().forEach(function(x){if(!f||x.start>f.start)f=x;});
+    return f;
+  }
   function needShift(){return !myShift();}
   function mLabel(m){return m==='tunai'?'Tunai':m==='qris'?'QRIS':m==='transfer'?'Transfer':m==='kasbon'?'Kasbon':'QRIS / Transfer';}
   function pmKey(m){return m==='tunai'?'tunai':m==='qris'?'qris':m==='transfer'?'transfer':'lama';}
@@ -3635,7 +3655,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     try{
       if(m==='open'){
         if(!can('shift.open')){forbid();}
-        if(activeShift()){err('Masih ada shift yang berjalan.');return;}
+        if(hbRole()?myShift():activeShift()){err('Masih ada shift yang berjalan.');return;}
         var sh={id:newId('h'),k:u.id,kn:u.n,start:new Date().toISOString(),end:null,open:parseInt(num('shOpen'),10)||0};
         await data.saveShift(sh);
         shHide();renderChrome();renderPay();toast('Shift dibuka.');
@@ -3677,6 +3697,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       switch(a){
         case 'lgOk':lgSubmit();break;
         case 'lgView':vwForm();break;
+        case 'lgHub':S.lmode='hub';S.lmsg='';loginKey='';renderLogin();break;
+        case 'lgHubGo':(function(){var er=hbJoinGo(($('#hbCode')||{}).value,($('#hbPin')||{}).value);var e=$('#hbErr');if(e)e.textContent=er||'Menyambung ke pusat…';})();break;
         case 'lgForgot':S.lmode='forgot';S.lmsg='';loginKey='';renderLogin();break;
         case 'lgBack':S.lmode='login';S.lmsg='';loginKey='';renderLogin();break;
         case 'lgShow':var pi=$('#'+b.dataset.for);if(pi){pi.type=pi.type==='password'?'text':'password';}break;
@@ -3694,6 +3716,13 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'shiftDone':shDone();break;
       case 'shiftView':var vs=S.shifts[id];if(vs)shDlg('view',vs);break;
       case 'shiftCopy':if(lastShift)copyText(shiftText(lastShift),'Ringkasan shift disalin.');break;
+      case 'hbMode':(function(){var v=b.dataset.v;if(v==='off'){if(S.hbJoin){S.hbJoin=false;var el0=$('#hbBox');if(el0)el0.dataset.s='';renderHbSet();}else hbOff();}
+        else if(v==='join'){S.hbJoin=true;var el1=$('#hbBox');if(el1)el1.dataset.s='';renderHbSet();}
+        else if(v==='hub'){hbSave({role:'hub',code:shRand(8),pin:shPin()});hubStart();var el2=$('#hbBox');if(el2)el2.dataset.s='';renderHbSet();renderChrome();}})();break;
+      case 'hbNew':(function(){hubStop();hbSave({role:'hub',code:shRand(8),pin:shPin()});hubStart();var el3=$('#hbBox');if(el3)el3.dataset.s='';renderHbSet();})();break;
+      case 'hbJoin':(function(){var hasData=Object.keys(S.days||{}).some(function(k){return (S.days[k]||[]).length;});
+        if(hasData&&!confirm('Data di perangkat ini akan diganti dengan data dari pusat. Lanjut?'))return;
+        var er=hbJoinGo(($('#hbCode')||{}).value,($('#hbPin')||{}).value);var e=$('#hbErr');if(e)e.textContent=er;if(!er){var el4=$('#hbBox');if(el4)el4.dataset.s='';renderHbSet();}})();break;
       case 'mbSw':data.saveSettings({mbOn:b.dataset.v==='1'?1:0}).then(function(){if(b.dataset.v!=='1'){S.mbSel='';var x=$('#mbIn');if(x)x.value='';}renderMbSet();renderChrome();renderPay();renderCart();}).catch(fail);break;
       case 'mbDefOk':(function(){var v=Math.min(100,parseInt((($('#mbDef')||{}).value||'').replace(/\D/g,''),10)||0);data.saveSettings({mbd:v}).then(function(){renderMbSet();renderCart();toast('Diskon member umum disimpan: '+v+'%.');}).catch(fail);})();break;
       case 'mbAllOk':(function(){var raw=(($('#mbAll')||{}).value||'').replace(/\D/g,'');if(raw===''){toast('Isi persen diskonnya dulu (isi 0 untuk meniadakan).');return;}var v=Math.min(100,parseInt(raw,10)||0);data.setAllMemberDisc(v).then(function(n){renderMember();renderMbSet();renderCart();toast('Diskon member '+v+'% diterapkan ke '+n+' member.');}).catch(fail);})();break;
@@ -5471,7 +5500,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     shS.lastStk=now;
     var ns=stkNow(p)+n;
     try{
-      await data.setStock(p.id,ns);
+      await data.addStock(p.id,n);
       var out={ok:true,id:p.id,name:p.name,add:n,stock:ns};
       if(Object.keys(shS.done).length>60)shS.done={};
       shS.done[j.rid||('x'+now)]=out;
@@ -5592,6 +5621,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     }
     return el;
   }
+  var VL_KEY='kasirku:vwlist';
+  function vlGet(){try{var a=JSON.parse(localStorage.getItem(VL_KEY)||'[]');return Array.isArray(a)?a.filter(function(x){return x&&String(x.code).length===8;}):[];}catch(e){return [];}}
+  function vlPut(a){try{localStorage.setItem(VL_KEY,JSON.stringify(a.slice(0,12)));}catch(e){}}
+  function vlSave(code,mode,pin){var a=vlGet(),i=a.findIndex(function(x){return x.code===code;});if(i>=0){a[i].mode=mode;a[i].pin=pin||'';}else a.push({code:code,mode:mode,pin:pin||'',name:''});vlPut(a);}
+  function vlName(code,name){if(!name)return;var a=vlGet(),i=a.findIndex(function(x){return x.code===code;});if(i>=0&&a[i].name!==name){a[i].name=name;vlPut(a);}}
+  function vlHtml(){
+    var a=vlGet();if(!a.length)return '';
+    return '<label class="lbl" style="margin-top:0">Layar tersimpan</label><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">'
+      +a.map(function(x,i){var cur=(VW.back&&x.code===VW.code);return '<div style="display:flex;gap:6px"><button class="btn grow" type="button" data-vw="use" data-i="'+i+'" style="text-align:left'+(cur?';border-color:var(--accent)':'')+'">'+esc(x.name||('Kasir '+shFmtCode(x.code)))+' <small style="color:var(--muted)">· '+(x.mode==='mon'?'Pantau':'Pelanggan')+(cur?' · sedang dilihat':'')+'</small></button><button class="btn" type="button" data-vw="vdel" data-i="'+i+'" aria-label="Hapus layar tersimpan">Hapus</button></div>';}).join('')
+      +'</div><label class="lbl" style="margin-top:0">Atau tambah layar kasir lain</label>';
+  }
   function vwPersist(){try{var o=JSON.parse(localStorage.getItem(VW_KEY)||'null');if(o){o.hide=VW.hide?1:0;localStorage.setItem(VW_KEY,JSON.stringify(o));}}catch(e){}}
   function vwThemeRow(){
     var a=accGet();
@@ -5613,7 +5653,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function vwForm(msg){
     var el=vwDom();VW.form=true;VW.on=true;el.hidden=false;
-    el.innerHTML='<div class="vw-form"><h2>Layar pelanggan / Pantau</h2><p class="hint" style="margin:0 0 12px">Pakai layar ini untuk melihat keranjang kasir secara langsung.</p>'
+    el.innerHTML='<div class="vw-form"><h2>Layar pelanggan / Pantau</h2><p class="hint" style="margin:0 0 12px">Pakai layar ini untuk melihat keranjang kasir secara langsung.</p>'+vlHtml()
       +'<div class="pick-row" style="margin-bottom:12px"><button class="chip" type="button" data-vw="mode" data-v="cust" aria-pressed="'+(VW.mode==='cust')+'">Layar pelanggan</button><button class="chip" type="button" data-vw="mode" data-v="mon" aria-pressed="'+(VW.mode==='mon')+'">Pantau kasir</button></div>'
       +'<label class="lbl" for="vwCode">Kode sambungan (8 huruf/angka)</label><input class="field" id="vwCode" autocomplete="off" autocapitalize="characters" maxlength="9" placeholder="ABCD-EFGH" value="'+esc(shFmtCode(VW.code))+'">'
       +(CAM?'<button class="btn block" type="button" data-vw="scan" style="margin-top:10px">Scan QR dengan kamera</button>':'<p class="hint" style="margin:8px 0 0">Kamera belum didukung di browser ini. Scan QR pakai aplikasi kamera bawaan, atau ketik kodenya.</p>')
@@ -5624,12 +5664,16 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function vwAct(a,b){
     if(a==='mode'){var c0=$('#vwCode'),p0=$('#vwPin');if(c0)VW.code=shNorm(c0.value);if(p0)VW.pin=p0.value;VW.mode=b.dataset.v==='mon'?'mon':'cust';vwForm();}
-    else if(a==='cancel'){VW.form=false;VW.on=false;var el=$('#vw');if(el){el.hidden=true;el.innerHTML='';}}
+    else if(a==='sw'){VW.back=true;vwClean();vwForm();}
+    else if(a==='use'){var it=vlGet()[+b.dataset.i];if(!it)return;VW.back=false;VW.code=it.code;VW.mode=it.mode==='mon'?'mon':'cust';VW.pin=it.pin||'';VW.snap=null;
+      try{localStorage.setItem(VW_KEY,JSON.stringify({code:VW.code,mode:VW.mode,pin:VW.pin,hide:VW.hide?1:0}));}catch(e){}vwBegin();}
+    else if(a==='vdel'){var l2=vlGet();l2.splice(+b.dataset.i,1);vlPut(l2);vwForm();}
+    else if(a==='cancel'){if(VW.back&&VW.code&&VW.code.length===8){VW.back=false;vwBegin();return;}VW.form=false;VW.on=false;var el=$('#vw');if(el){el.hidden=true;el.innerHTML='';}}
     else if(a==='go'){
       var code=shNorm(($('#vwCode')||{}).value),pin=(($('#vwPin')||{}).value||'');
       if(code.length!==8){var e1=$('#vwErr');if(e1)e1.textContent='Kode harus 8 huruf atau angka.';return;}
       if(VW.mode==='mon'&&pin.length!==4){var e2=$('#vwErr');if(e2)e2.textContent='PIN pantau 4 angka.';return;}
-      VW.code=code;VW.pin=pin;
+      VW.back=false;VW.snap=null;VW.code=code;VW.pin=pin;
       try{localStorage.setItem(VW_KEY,JSON.stringify({code:code,mode:VW.mode,pin:pin,hide:VW.hide?1:0}));}catch(e){}
       vwBegin();
     }
@@ -5649,6 +5693,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     }
   }
   function vwBegin(){
+    vlSave(VW.code,VW.mode,VW.pin);VW.back=false;
     VW.form=false;VW.on=true;VW.snap=null;VW.up=false;VW.lastId=null;VW.thanksUntil=0;VW.state='connecting';
     vwDom().hidden=false;vwWake();vwRender();vwClean();
     VW.sig=Sig('kv-'+shRand(10),{
@@ -5845,8 +5890,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var el=$('#vw');if(!el||el.hidden||VW.form||!VW.on)return;
     var s=VW.snap,mon=VW.mode==='mon',st=VW.state,up=(st==='up');
     var statTxt=up?'Tersambung':(st==='lost'?'Terputus '+tm(new Date(VW.lostAt)):(st==='bye'?'Kasir keluar '+tm(new Date(VW.lostAt)):(st==='offline'?'Kasir belum online':(st==='deny'?'PIN salah':'Menyambung…'))));
-    var ctl=VW.hide?'':(((mon&&up&&s&&s.rs)?'<button class="vw-x" type="button" data-vw="stk" style="margin-left:8px">Tambah stok</button>':'')+'<button class="vw-x" type="button" data-vw="theme" style="margin-left:8px">Tema</button><button class="vw-x" type="button" data-vw="hide" style="margin-left:8px">Sembunyikan</button><button class="vw-x" type="button" data-vw="exit" style="margin-left:8px">Keluar</button>');
+    var ctl=VW.hide?'':(((mon&&up&&s&&s.rs)?'<button class="vw-x" type="button" data-vw="stk" style="margin-left:8px">Tambah stok</button>':'')+'<button class="vw-x" type="button" data-vw="sw" style="margin-left:8px">Ganti layar</button><button class="vw-x" type="button" data-vw="theme" style="margin-left:8px">Tema</button><button class="vw-x" type="button" data-vw="hide" style="margin-left:8px">Sembunyikan</button><button class="vw-x" type="button" data-vw="exit" style="margin-left:8px">Keluar</button>');
     var note=(VW.hide&&Date.now()<VW.hintUntil)?'<div class="vw-note">Tombol disembunyikan. Ketuk nama toko 5 kali, atau tahan 2 detik, untuk memunculkannya lagi.</div>':'';
+    if(s&&VW.code)vlName(VW.code,(s.kasir?s.kasir+' · ':'')+(s.shop||''));
     var kas=(s&&s.kasir)?'<div class="vw-kas">Kasir: '+esc(s.kasir)+'</div>':'';
     var h='<div class="vw-top"><b data-vw="title">'+esc(s?s.shop:'Kasirku')+'</b><div class="vw-right"><div class="vw-st"><span class="vw-dot'+(up?'':' off')+'"></span>'+esc(statTxt)+'</div>'+kas+(ctl?'<div class="vw-ctl">'+ctl+'</div>':'')+'</div></div>'
       +((!VW.hide&&VW.themeOpen)?'<div class="vw-themes">'+vwThemeRow()+'</div>':'');
@@ -5900,6 +5946,311 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(v&&v.code&&String(v.code).length===8){VW.code=v.code;VW.mode=v.mode==='mon'?'mon':'cust';VW.pin=v.pin||'';vwBegin();}
   }
   setTimeout(vwAutoStart,300);
+  /* ================= MODE PUSAT (banyak kasir, stok dan data satu) ================= */
+  /* Satu perangkat jadi pusat. Perangkat kasir lain tersambung (WebRTC) dan semua perubahan dikirim sebagai operasi.
+     Pusat menjalankan operasi itu, lalu menyiarkannya ke kasir lain. Kalau kasir offline, operasi antre dan dikirim saat tersambung lagi. */
+  var HB_KEY='kasirku:hub',HQ_KEY='kasirku:hubq',HD_KEY='kasirku:hubdone',HB_CH=12000;
+  var HB_SYNC=['saveProduct','deleteProducts','saveStore','saveSettings','saveUsers','saveShift','setStock','addStock','addExpense','deleteExpense','addRefund','saveMember','setAllMemberDisc','deleteMember','useKbCode','genKbCode','clearKbCodes','addKbPay','addSale'];
+  var HB_RAW={};
+  function hbCfg(){try{var j=JSON.parse(localStorage.getItem(HB_KEY)||'null');return (j&&(j.role==='hub'||j.role==='sat')&&j.code)?j:null;}catch(e){return null;}}
+  function hbSave(c){try{if(c)localStorage.setItem(HB_KEY,JSON.stringify(c));else localStorage.removeItem(HB_KEY);}catch(e){}}
+  function hbRole(){var c=hbCfg();return (STANDALONE&&!db&&c)?c.role:'';}
+  function hbQ(){try{var a=JSON.parse(localStorage.getItem(HQ_KEY)||'[]');return Array.isArray(a)?a:[];}catch(e){return [];}}
+  function hbQPut(a){try{localStorage.setItem(HQ_KEY,JSON.stringify(a));}catch(e){}}
+  function hbId(){return 'o'+Date.now().toString(36)+shRand(6);}
+  function hbTx(dc,o){
+    return new Promise(function(res){
+      try{
+        var s=JSON.stringify(o);
+        if(s.length<=HB_CH){dc.send(s);res(true);return;}
+        var id=shRand(6),n=Math.ceil(s.length/HB_CH),i=0;
+        (function nxt(){
+          if(dc.readyState!=='open'){res(false);return;}
+          if(dc.bufferedAmount>2000000){setTimeout(nxt,40);return;}
+          var k=0;
+          while(i<n&&k<30&&dc.bufferedAmount<1000000){dc.send(JSON.stringify({t:'ck',id:id,i:i,n:n,d:s.slice(i*HB_CH,(i+1)*HB_CH)}));i++;k++;}
+          if(i<n)setTimeout(nxt,10);else res(true);
+        })();
+      }catch(e){res(false);}
+    });
+  }
+  function hbRx(holder,raw,cb){
+    var j;try{j=JSON.parse(raw);}catch(e){return;}
+    if(!j)return;
+    if(j.t==='ck'){
+      holder.ck=holder.ck||{};
+      var b=holder.ck[j.id]||(holder.ck[j.id]={n:j.n,p:[],c:0});
+      if(b.p[j.i]===undefined){b.p[j.i]=j.d;b.c++;}
+      if(b.c>=b.n){delete holder.ck[j.id];var f;try{f=JSON.parse(b.p.join(''));}catch(e){return;}cb(f);}
+      return;
+    }
+    cb(j);
+  }
+  function hbSnapData(){return {products:S.products,store:S.store,days:S.days,exp:S.exp,shifts:S.shifts,refunds:S.refunds};}
+  function hbRefresh(){
+    try{renderAll();}catch(e){}
+    try{renderPay();}catch(e){}try{renderMember();}catch(e){}try{renderKasbon();}catch(e){}try{renderBk();}catch(e){}try{renderLogin();}catch(e){}try{renderShift();}catch(e){}
+  }
+  /* ---- pusat ---- */
+  var HH={sig:null,conns:{},code:'',ready:false,bad:{n:0,until:0},chain:Promise.resolve(),done:null};
+  function hbDone(){if(!HH.done){try{HH.done=JSON.parse(localStorage.getItem(HD_KEY)||'[]');}catch(e){HH.done=[];}if(!Array.isArray(HH.done))HH.done=[];}return HH.done;}
+  function hbMark(id){var d=hbDone();d.push(id);if(d.length>800)d.splice(0,d.length-800);try{localStorage.setItem(HD_KEY,JSON.stringify(d));}catch(e){}}
+  function hubReady(c){return !!(c.dc&&c.dc.readyState==='open'&&c.ready);}
+  function hubCount(){return Object.keys(HH.conns).filter(function(k){return hubReady(HH.conns[k]);}).length;}
+  function hubDrop(cid){var c=HH.conns[cid];if(!c)return;delete HH.conns[cid];try{c.dc&&(c.dc.onclose=null);}catch(e){}try{c.pc.close();}catch(e){}}
+  function hubStop(){
+    Object.keys(HH.conns).forEach(function(k){var c=HH.conns[k];try{if(c.dc&&c.dc.readyState==='open')c.dc.send(JSON.stringify({t:'bye'}));}catch(e){}hubDrop(k);});
+    if(HH.sig){try{HH.sig.close();}catch(e){}}
+    HH.sig=null;HH.ready=false;HH.code='';
+  }
+  function hubStart(){
+    var c=hbCfg();if(!c||c.role!=='hub'||!shCan()||HH.sig)return;
+    HH.code=c.code;
+    HH.sig=Sig('kasirku-hub-'+c.code,{open:function(){HH.ready=true;hbUi();},down:function(){HH.ready=false;hbUi();},taken:function(){HH.ready=false;hbUi();},msg:hubOnMsg});
+  }
+  function hubOnMsg(m){
+    var p=m.payload||{},cid=p.connectionId,src=m.src;
+    if(m.type==='OFFER'){
+      if(!cid||!src||!p.sdp||!HH.sig)return;
+      if(HH.conns[cid])hubDrop(cid);
+      var pc=shPc(),c={pc:pc,dc:null,src:src,q:[],ready:false,ck:{},dev:''};
+      HH.conns[cid]=c;
+      pc.onicecandidate=function(e){if(e.candidate&&HH.sig)HH.sig.send({type:'CANDIDATE',dst:src,payload:{candidate:shCand(e.candidate),type:'data',connectionId:cid}});};
+      pc.ondatachannel=function(e){
+        c.dc=e.channel;
+        e.channel.onmessage=function(ev){hbRx(c,ev.data,function(j){hubOnData(cid,j);});};
+        e.channel.onclose=function(){hubDrop(cid);hbUi();};
+      };
+      pc.onconnectionstatechange=function(){if(pc.connectionState==='failed'||pc.connectionState==='closed'){hubDrop(cid);hbUi();}};
+      pc.setRemoteDescription(p.sdp).then(function(){
+        c.q.splice(0).forEach(function(x){pc.addIceCandidate(x).catch(function(){});});
+        return pc.createAnswer();
+      }).then(function(a){
+        return pc.setLocalDescription(a).then(function(){
+          if(HH.sig)HH.sig.send({type:'ANSWER',dst:src,payload:{sdp:{type:a.type,sdp:a.sdp},type:'data',connectionId:cid,browser:'chrome'}});
+        });
+      }).catch(function(){hubDrop(cid);});
+    }else if(m.type==='CANDIDATE'){
+      var c2=HH.conns[cid];if(!c2||!p.candidate)return;
+      if(c2.pc.remoteDescription)c2.pc.addIceCandidate(p.candidate).catch(function(){});else c2.q.push(p.candidate);
+    }else if(m.type==='LEAVE'){hubDrop(cid);hbUi();}
+  }
+  async function hubExec(op){
+    if(!op||!op.id||!HB_RAW[op.m])return {ok:false};
+    if(hbDone().indexOf(op.id)>=0)return {ok:true,dup:true};
+    var ok=true;
+    HB.rpc=true;
+    try{await HB_RAW[op.m].apply(data,Array.isArray(op.a)?op.a:[]);}catch(e){ok=false;}
+    finally{HB.rpc=false;}
+    if(ok){hbMark(op.id);hbRefresh();}
+    return {ok:ok};
+  }
+  function hubBroadcast(o,except){
+    Object.keys(HH.conns).forEach(function(k){var c=HH.conns[k];if(k===except||!hubReady(c))return;hbTx(c.dc,o);});
+  }
+  function hubOnData(cid,j){
+    var c=HH.conns[cid];if(!c||!j)return;
+    if(j.t==='hello'){
+      HH.chain=HH.chain.then(async function(){
+        var now=Date.now(),cfg=hbCfg();
+        if(!cfg||cfg.role!=='hub')return;
+        if(HH.bad.until>now){hbTx(c.dc,{t:'deny',lock:1});return;}
+        if(String(j.pin||'')!==String(cfg.pin||'')){
+          HH.bad.n++;if(HH.bad.n>=5){HH.bad.until=now+300000;HH.bad.n=0;}
+          hbTx(c.dc,{t:'deny',lock:HH.bad.until>now?1:0});return;
+        }
+        HH.bad.n=0;c.dev=String(j.dev||'').slice(0,30);
+        var q=Array.isArray(j.q)?j.q:[];
+        for(var i=0;i<q.length;i++){var r=await hubExec(q[i]);hbTx(c.dc,{t:'ack',id:q[i].id,ok:r.ok});if(r.ok&&!r.dup)hubBroadcast({t:'bc',id:q[i].id,m:q[i].m,a:q[i].a},cid);}
+        await hbTx(c.dc,{t:'snap',d:hbSnapData()});
+        c.ready=true;hbUi();
+      }).catch(function(){});
+    }else if(j.t==='op'){
+      if(!c.ready)return;
+      HH.chain=HH.chain.then(async function(){
+        var r=await hubExec(j);
+        hbTx(c.dc,{t:'ack',id:j.id,ok:r.ok});
+        if(r.ok&&!r.dup)hubBroadcast({t:'bc',id:j.id,m:j.m,a:j.a},cid);
+      }).catch(function(){});
+    }else if(j.t==='sync'){
+      if(!c.ready)return;
+      HH.chain=HH.chain.then(function(){return hbTx(c.dc,{t:'snap',d:hbSnapData()});}).catch(function(){});
+    }else if(j.t==='who'){c.dev=String(j.dev||'').slice(0,30);hbUi();}
+  }
+  /* ---- perangkat kasir (satelit) ---- */
+  var HS={sig:null,pc:null,dc:null,cid:'',up:false,state:'',q:[],rd:false,ck:{},retryT:null,dialT:null,lock:false,msg:''};
+  function satClean(){
+    clearTimeout(HS.retryT);clearTimeout(HS.dialT);
+    if(HS.dc){try{HS.dc.onclose=null;HS.dc.close();}catch(e){}}
+    if(HS.pc){try{HS.pc.close();}catch(e){}}
+    HS.dc=null;HS.pc=null;HS.cid='';HS.q=[];HS.up=false;HS.ck={};
+    if(HS.sig){try{HS.sig.close();}catch(e){}HS.sig=null;}
+  }
+  function satStart(){
+    var c=hbCfg();if(!c||c.role!=='sat'||!shCan())return;
+    satClean();HS.state='connecting';HS.lock=false;hbUi();
+    HS.sig=Sig('kh-'+shRand(10),{
+      open:function(){if(!HS.up&&!HS.pc)satDial();},
+      down:function(){if(!HS.up){HS.state='connecting';hbUi();}},
+      msg:satOnMsg
+    });
+  }
+  function satRetry(ms){
+    clearTimeout(HS.retryT);
+    HS.retryT=setTimeout(function(){
+      var c=hbCfg();if(!c||c.role!=='sat'||HS.up||HS.state==='deny')return;
+      if(HS.dc){try{HS.dc.onclose=null;HS.dc.close();}catch(e){}}
+      if(HS.pc){try{HS.pc.close();}catch(e){}}
+      HS.dc=null;HS.pc=null;
+      if(HS.sig&&HS.sig.ready)satDial();else satRetry(2000);
+    },ms||4000);
+  }
+  function satDial(){
+    var c=hbCfg();if(!c||!HS.sig||!HS.sig.ready)return;
+    var pc=shPc(),cid='dc_'+shRand(10),dst='kasirku-hub-'+c.code;
+    HS.pc=pc;HS.cid=cid;HS.q=[];HS.rd=false;
+    var dc=pc.createDataChannel(cid,{ordered:true});HS.dc=dc;
+    dc.onopen=function(){hbTx(dc,{t:'hello',pin:c.pin,dev:(me()?me().n:''),q:hbQ()});};
+    dc.onmessage=function(ev){hbRx(HS,ev.data,satOnData);};
+    dc.onclose=function(){satLost();};
+    pc.onicecandidate=function(e){if(e.candidate&&HS.sig)HS.sig.send({type:'CANDIDATE',dst:dst,payload:{candidate:shCand(e.candidate),type:'data',connectionId:cid}});};
+    pc.onconnectionstatechange=function(){if(pc.connectionState==='failed')satLost();};
+    pc.createOffer().then(function(o){return pc.setLocalDescription(o).then(function(){
+      if(HS.sig)HS.sig.send({type:'OFFER',dst:dst,payload:{sdp:{type:o.type,sdp:o.sdp},type:'data',connectionId:cid,label:cid,reliable:true,serialization:'json',browser:'chrome'}});
+    });}).catch(function(){satRetry();});
+    clearTimeout(HS.dialT);
+    HS.dialT=setTimeout(function(){if(!HS.up){HS.state='offline';hbUi();satRetry(1500);}},15000);
+  }
+  function satOnMsg(m){
+    var p=m.payload||{};
+    if(m.type==='ANSWER'&&p.connectionId===HS.cid&&HS.pc&&p.sdp){
+      HS.pc.setRemoteDescription(p.sdp).then(function(){HS.rd=true;HS.q.splice(0).forEach(function(x){HS.pc.addIceCandidate(x).catch(function(){});});}).catch(function(){});
+    }else if(m.type==='CANDIDATE'&&p.connectionId===HS.cid&&HS.pc&&p.candidate){
+      if(HS.rd)HS.pc.addIceCandidate(p.candidate).catch(function(){});else HS.q.push(p.candidate);
+    }else if(m.type==='EXPIRE'||m.type==='ERROR'){
+      if(!HS.up){HS.state='offline';hbUi();satRetry(3000);}
+    }
+  }
+  function satLost(){
+    var c=hbCfg();if(!c||c.role!=='sat'||HS.state==='deny')return;
+    HS.up=false;HS.state='offline';hbUi();satRetry(3000);
+  }
+  async function satApply(m,a){
+    if(!HB_RAW[m])return false;
+    HB.rpc=true;
+    try{await HB_RAW[m].apply(data,Array.isArray(a)?a:[]);return true;}catch(e){return false;}
+    finally{HB.rpc=false;}
+  }
+  async function satOnData(j){
+    if(!j)return;
+    if(j.t==='deny'){HS.lock=!!j.lock;HS.state='deny';HS.up=false;clearTimeout(HS.retryT);clearTimeout(HS.dialT);hbUi();return;}
+    if(j.t==='bye'){HS.up=false;HS.state='offline';hbUi();satRetry(3000);return;}
+    if(j.t==='ack'){
+      var q=hbQ().filter(function(x){return x.id!==j.id;});hbQPut(q);
+      if(j.ok===false&&HS.dc&&HS.dc.readyState==='open')hbTx(HS.dc,{t:'sync'});
+      hbUi();return;
+    }
+    if(j.t==='bc'){await satApply(j.m,j.a);hbRefresh();return;}
+    if(j.t==='snap'&&j.d){
+      var d=j.d;
+      S.products=d.products||[];S.store=d.store||{name:''};S.days=d.days||{};S.exp=d.exp||{};S.shifts=d.shifts||{};S.refunds=d.refunds||{};
+      saveLocal();
+      var pend=hbQ();
+      for(var i=0;i<pend.length;i++)await satApply(pend[i].m,pend[i].a);
+      clearTimeout(HS.dialT);
+      HS.up=true;HS.state='up';HS.lock=false;
+      if(S.lmode==='hub')S.lmode='login';
+      loginKey='';hbRefresh();hbUi();
+    }
+  }
+  /* ---- pembungkus data: tiap perubahan dikirim ---- */
+  HB_SYNC.forEach(function(m){
+    var o=data[m];if(!o)return;
+    HB_RAW[m]=o;
+    data[m]=async function(){
+      var a=[].slice.call(arguments);
+      var r=await o.apply(data,a);
+      var role=hbRole();
+      if(role==='hub'){hubBroadcast({t:'bc',id:hbId(),m:m,a:a});}
+      else if(role==='sat'){
+        var op={id:hbId(),m:m,a:a},q=hbQ();q.push(op);hbQPut(q);
+        if(HS.up&&HS.dc&&HS.dc.readyState==='open')hbTx(HS.dc,{t:'op',id:op.id,m:m,a:a});
+        hbUi();
+      }
+      return r;
+    };
+  });
+  /* ---- tampilan ---- */
+  function hbBadge(){
+    var r=hbRole();if(!r)return '';
+    if(r==='hub')return ' · <span title="Perangkat pusat">● Pusat '+hubCount()+'</span>';
+    var n=hbQ().length;
+    return ' · <span title="Sambungan ke pusat">'+(HS.up?'● Pusat':'○ Offline'+(n?' (antre '+n+')':''))+'</span>';
+  }
+  function hbStatTxt(){
+    var c=hbCfg();if(!c)return '';
+    if(c.role==='hub'){
+      var open=Object.keys(S.shifts||{}).map(function(k){return S.shifts[k];}).filter(function(s){return !s.end;}).map(function(s){return s.kn||'Kasir';});
+      return (HH.ready?'Siap. ':'Menghubungi server perantara… ')+'Kasir tersambung: '+hubCount()+'. Shift berjalan: '+(open.length?open.join(', '):'tidak ada')+'.';
+    }
+    var n=hbQ().length;
+    var st=HS.state==='up'?'Tersambung ke pusat.':(HS.state==='deny'?(HS.lock?'Terkunci sementara, terlalu banyak PIN salah. Coba 5 menit lagi.':'PIN pusat salah.'):(HS.state==='offline'?'Pusat belum online. Tetap bisa jualan, data antre dan dikirim nanti.':'Menyambung…'));
+    return st+(n?' Antrean belum terkirim: '+n+'.':'');
+  }
+  function hbUi(){
+    try{var s=$('#hbStat');if(s)s.textContent=hbStatTxt();var e=$('#hbErr');if(e&&S.lmode==='hub'&&HS.state!=='up')e.textContent=(HS.state==='deny'||HS.state==='offline')?hbStatTxt():'';}catch(x){}
+    try{var w=$('#who');if(w&&!w.hidden&&me()){renderChrome();}}catch(x){}
+  }
+  function renderHbSet(){
+    var el=$('#hbBox');if(!el)return;
+    var c=hbCfg(),r=c?c.role:'';
+    var sig=(r||'')+'|'+(c?c.code+c.pin:'')+'|'+(S.hbJoin?1:0);
+    if(el.dataset.s===sig){hbUi();return;}
+    el.dataset.s=sig;
+    var h='<p class="hint" style="margin:0 0 10px">Untuk toko dengan beberapa kasir di perangkat masing-masing. Satu perangkat jadi pusat, stok dan data jadi satu. Kalau cuma satu perangkat, biarkan Mati.</p>';
+    if(!r&&!S.hbJoin){
+      h+='<div class="pick-row"><button class="chip" type="button" data-act="hbMode" data-v="off" aria-pressed="true">Mati</button><button class="chip" type="button" data-act="hbMode" data-v="hub" aria-pressed="false">Jadikan pusat</button><button class="chip" type="button" data-act="hbMode" data-v="join" aria-pressed="false">Sambung ke pusat</button></div>';
+    }else if(!r&&S.hbJoin){
+      h+='<label class="lbl" for="hbCode">Kode pusat (8 huruf/angka)</label><input class="field" id="hbCode" autocomplete="off" autocapitalize="characters" maxlength="9" placeholder="ABCD-EFGH">'
+        +'<label class="lbl" for="hbPin" style="margin-top:10px">PIN pusat (4 angka)</label><input class="field" id="hbPin" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="0000">'
+        +'<p class="hint pin-err" id="hbErr" role="alert"></p><p class="hint" style="margin:6px 0 0">Data di perangkat ini akan diganti dengan data dari pusat.</p>'
+        +'<div class="modal-actions"><button class="btn grow" type="button" data-act="hbMode" data-v="off">Batal</button><button class="btn primary grow" type="button" data-act="hbJoin">Sambungkan</button></div>';
+    }else if(r==='hub'){
+      h+='<div class="rec-code" style="font-size:22px">'+esc(shFmtCode(c.code))+'</div><p style="text-align:center;margin:4px 0 10px">PIN: <b>'+esc(c.pin)+'</b></p>'
+        +'<p class="hint" style="margin:0 0 8px">Di perangkat kasir: tab Akun, Banyak kasir, Sambung ke pusat. Masukkan kode dan PIN ini. Biarkan aplikasi ini terbuka dan online selama toko buka.</p>'
+        +'<div class="modal-actions"><button class="btn grow" type="button" data-act="hbNew">Kode dan PIN baru</button><button class="btn grow" type="button" data-act="hbMode" data-v="off">Matikan mode pusat</button></div>';
+    }else{
+      h+='<p style="margin:0 0 8px">Tersambung ke pusat <b>'+esc(shFmtCode(c.code))+'</b></p><div class="modal-actions"><button class="btn grow" type="button" data-act="hbMode" data-v="off">Putus dari pusat</button></div>';
+    }
+    h+=(r?'<p class="hint" id="hbStat" style="margin:10px 0 0"></p>':'');
+    el.innerHTML=h;hbUi();
+  }
+  function hbJoinGo(code,pin){
+    code=shNorm(code);pin=String(pin||'').replace(/\D/g,'');
+    if(code.length!==8)return 'Kode harus 8 huruf atau angka.';
+    if(pin.length!==4)return 'PIN 4 angka.';
+    hbQPut([]);
+    hbSave({role:'sat',code:code,pin:pin});
+    S.hbJoin=false;
+    satStart();hbUi();
+    return '';
+  }
+  function hbOff(){
+    var c=hbCfg();
+    if(c&&c.role==='sat'&&hbQ().length&&!confirm('Masih ada '+hbQ().length+' transaksi yang belum terkirim ke pusat. Kalau diputus sekarang, itu hilang. Lanjut putus?'))return;
+    hubStop();satClean();hbSave(null);hbQPut([]);HS.state='';S.hbJoin=false;
+    var el=$('#hbBox');if(el)el.dataset.s='';
+    renderHbSet();renderChrome();
+  }
+  function hbAuto(){var c=hbCfg();if(!c||!STANDALONE||db)return;if(c.role==='hub')hubStart();else satStart();}
+  window.addEventListener('online',function(){var c=hbCfg();if(c&&c.role==='sat'&&!HS.up&&HS.state!=='deny'){satStart();}});
+  /* kirim ulang antrean yang belum dijawab pusat (pusat membuang duplikat lewat id) */
+  setInterval(function(){
+    if(hbRole()!=='sat'||!HS.up||!HS.dc||HS.dc.readyState!=='open')return;
+    var q=hbQ(),now=Date.now();HS.seen=HS.seen||{};
+    q.forEach(function(op){var t=HS.seen[op.id]||(HS.seen[op.id]={f:now,l:now});if(now-t.f>5000&&now-t.l>4000){t.l=now;hbTx(HS.dc,{t:'op',id:op.id,m:op.m,a:op.a});}});
+  },2000);
+  setTimeout(hbAuto,400);
   start();
 })();
 </script>
