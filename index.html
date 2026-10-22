@@ -492,10 +492,6 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     <div class="panel" id="thBox"></div>
     <div class="section-head"><h2>Cadangan data</h2></div>
     <div class="panel" id="bkBox"></div>
-    <div class="section-head"><h2>Member</h2></div>
-    <div class="panel" id="mbBox"></div>
-    <div class="section-head"><h2>Kasbon</h2></div>
-    <div class="panel" id="kbBox"></div>
     <div class="section-head"><h2>Banyak kasir (mode pusat)</h2></div>
     <div class="panel" id="hbBox"></div>
     <div class="section-head"><h2>Layar pelanggan dan pantau</h2></div>
@@ -545,6 +541,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   <!-- RIWAYAT -->
   <section id="view-member" hidden aria-labelledby="tab-member">
     <div class="section-head"><h2>Member</h2><button class="btn primary" type="button" data-act="mbAdd">Tambah member</button></div>
+    <div class="panel" id="mbBox" hidden></div>
     <div class="note" id="mbOffNote" hidden><p><b>Fitur member sedang mati.</b> Kasir tidak bisa menambah atau memakai member, dan diskon member tidak berlaku. Hanya admin yang masih bisa mengatur daftar ini. Nyalakan di tab Akun, bagian Member.</p></div>
     <div class="panel" id="mbBulk" hidden></div>
     <div class="stats" id="mbSum"></div>
@@ -555,6 +552,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
   <section id="view-kasbon" hidden aria-labelledby="tab-kasbon">
     <div class="section-head"><h2>Kasbon pelanggan</h2></div>
+    <div class="panel" id="kbBox" hidden></div>
     <div class="stats" id="kbSum"></div>
     <div class="date-row"><input class="field" id="kbQ" placeholder="Cari nama pelanggan" autocomplete="off"></div>
     <div class="pick-row" style="margin:0 0 10px"><button class="chip" type="button" data-act="kbAll" id="kbAllBtn" aria-pressed="false">Tampilkan yang sudah lunas</button></div>
@@ -640,7 +638,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='48',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='49',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -1430,6 +1428,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function renderKasbon(){
     if(S.tab!=='kasbon'||!can('kasbon'))return;
+    renderKbSet();
     var m=kbDebts(),arr=Object.keys(m).map(function(k){return m[k];}),out=0,cnt=0;
     arr.forEach(function(d){if(d.bal>0){out+=d.bal;cnt++;}});
     $('#kbSum').innerHTML='<div class="stat"><small>Total belum dibayar</small><b>'+rp(out)+'</b></div><div class="stat"><small>Pelanggan berutang</small><b>'+cnt+'</b></div>';
@@ -1462,6 +1461,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function renderKbSet(){
     var el=$('#kbBox');if(!el)return;
+    el.hidden=!isAdmin();if(!isAdmin()){el.innerHTML='';return;}
     var on=kbOn(),rk=!!shCfg().rkb,act=kbCodes().filter(function(c){return c.exp>Date.now();}).length;
     el.innerHTML='<label class="lbl" style="margin-top:0">Fitur kasbon</label><div class="pick-row"><button class="chip" type="button" data-act="kbSw" data-v="1" aria-pressed="'+on+'">Aktif</button><button class="chip" type="button" data-act="kbSw" data-v="0" aria-pressed="'+(!on)+'">Mati</button></div>'
       +'<p class="hint" style="margin:6px 0 0">Kasbon (bayar nanti) hanya bisa dicatat kalau admin menyetujui. Cara menyetujui: (1) admin sendiri yang login, (2) admin memasukkan username dan password di layar kasir, (3) admin menekan Setujui di layar pantau, atau (4) kasir memasukkan kode sekali pakai yang dibuat admin. Kalau fitur Mati, tombol Kasbon hilang dari kasir, tapi utang yang sudah ada tetap bisa dibayar di tab Kasbon.</p>'
@@ -1598,6 +1598,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function renderMember(){
     if(S.tab!=='member'||!can('member'))return;
+    renderMbSet();
     var all=mbAll(),q=String(S.mbQ||'').trim().toLowerCase(),qd=q.replace(/\D/g,'');
     $('#mbSum').innerHTML='<div class="stat"><small>Jumlah member</small><b>'+all.length+'</b></div>';
     $('#mbOffNote').hidden=mbOn();
@@ -1687,6 +1688,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   function renderMbSet(){
     var el=$('#mbBox');if(!el)return;
+    el.hidden=!isAdmin();if(!isAdmin()){el.innerHTML='';return;}
     var on=mbOn();
     el.innerHTML='<label class="lbl" style="margin-top:0">Fitur member</label><div class="pick-row"><button class="chip" type="button" data-act="mbSw" data-v="1" aria-pressed="'+on+'">Aktif</button><button class="chip" type="button" data-act="mbSw" data-v="0" aria-pressed="'+(!on)+'">Mati</button></div>'
       +'<p class="hint" style="margin:6px 0 0">Kalau Mati, kasir tidak bisa menambah atau memakai member (kolom Member dan tab Member hilang dari akun kasir), dan diskon member tidak berlaku. Admin tetap bisa mengatur daftar member. Data member tidak terhapus.</p>'
@@ -3242,7 +3244,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     location.reload();
   }
   function renderBk(){
-    renderRs();renderTh();renderSh();renderMbSet();renderKbSet();renderHbSet();
+    renderRs();renderTh();renderSh();renderHbSet();
     var el=$('#bkBox');if(!el)return;
     el.innerHTML='<p class="hint" style="margin:0 0 10px">Simpan semua data (produk, transaksi, laporan, akun) ke satu file di HP. '+esc(bkLastText())+'</p>'
       +'<div class="modal-actions"><button class="btn primary grow" type="button" data-act="bkSave">Cadangkan data</button>'
