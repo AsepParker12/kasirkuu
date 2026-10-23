@@ -639,7 +639,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='52',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='53',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -2639,6 +2639,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       h+='<h2 id="lgTitle">Masuk</h2><p class="intro">Masukkan username dan password atau PIN akunmu.</p>'+msg
         +lgField('lgUser','Username','maxlength="20"')
         +lgPw('lgPw','Password atau PIN')
+        +'<div class="pick-row" style="margin:2px 0 10px"><button class="chip" type="button" data-act="lgStay" aria-pressed="'+stayOn()+'">Tetap masuk di perangkat ini</button></div>'
         +err+'<button class="btn primary block" type="button" id="lgGo" data-act="lgOk">Masuk</button>'
         +'<p class="hint" style="margin-top:12px">Admin dan kasir masuk di sini dengan akun masing-masing. Akun kasir dibuat oleh Admin di tab Akun.</p>'
         +'<button class="pin-link" type="button" data-act="lgForgot">Lupa password Admin?</button>'
@@ -2749,7 +2750,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   ['click','keydown','input','touchstart'].forEach(function(ev){document.addEventListener(ev,function(){lastAct=Date.now();},true);});
   setInterval(function(){
     var u=me();
-    if(u&&Date.now()-lastAct>IDLE[u.r])endSession('Sesi berakhir karena lama tidak dipakai. Silakan masuk lagi.');
+    if(u&&!stayOn()&&Date.now()-lastAct>IDLE[u.r])endSession('Sesi berakhir karena lama tidak dipakai. Silakan masuk lagi.');
   },10000);
 
   /* ----- Dialog akun (admin) ----- */
@@ -3707,6 +3708,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       switch(a){
         case 'lgOk':lgSubmit();break;
         case 'lgView':vwForm();break;
+        case 'lgStay':try{if(stayOn())localStorage.removeItem('kasirku:stay');else localStorage.setItem('kasirku:stay','1');}catch(e){}b.setAttribute('aria-pressed',String(stayOn()));break;
         case 'lgHubOff':hbLeave();break;
         case 'lgHub':S.lmode='hub';S.lmsg='';loginKey='';renderLogin();break;
         case 'lgHubGo':(function(){var er=hbJoinGo(($('#hbCode')||{}).value,($('#hbPin')||{}).value);var e=$('#hbErr');if(e)e.textContent=er||'Menyambung ke pusat…';})();break;
