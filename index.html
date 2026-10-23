@@ -369,6 +369,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       <button class="tab" role="tab" id="tab-riwayat" data-act="tab" data-tab="riwayat" aria-selected="false" hidden>Riwayat</button>
       <button class="tab" role="tab" id="tab-kasbon" data-act="tab" data-tab="kasbon" aria-selected="false" hidden>Kasbon</button>
       <button class="tab" role="tab" id="tab-member" data-act="tab" data-tab="member" aria-selected="false" hidden>Member</button>
+      <button class="tab" role="tab" id="tab-beli" data-act="tab" data-tab="beli" aria-selected="false" hidden>Pembelian</button>
       <button class="tab" role="tab" id="tab-laporan" data-act="tab" data-tab="laporan" aria-selected="false" hidden>Laporan</button>
       <button class="tab" role="tab" id="tab-akun" data-act="tab" data-tab="akun" aria-selected="false" hidden>Akun</button>
     </nav>
@@ -466,6 +467,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         <label class="lbl" for="storeIn">Nama toko</label>
         <input class="field" id="storeIn" maxlength="40" placeholder="Contoh: Warung Bu Sari" autocomplete="off">
         <p class="hint">Muncul di atas layar dan di struk.</p>
+        <div class="form-row"><label class="lbl" for="storeAddr">Alamat toko di struk (boleh kosong)</label><input class="field" id="storeAddr" maxlength="80" placeholder="Contoh: Jl. Sudirman No. 5, Binjai" autocomplete="off"></div>
+        <div class="form-row"><label class="lbl" for="storeTel">Nomor telepon toko di struk (boleh kosong)</label><input class="field" id="storeTel" maxlength="20" inputmode="tel" placeholder="Contoh: 0812 3456 7890" autocomplete="off"></div>
+        <div class="form-row"><label class="lbl" for="storeFoot">Kalimat penutup struk</label><input class="field" id="storeFoot" maxlength="80" placeholder="Terima kasih" autocomplete="off"><p class="hint" style="margin:6px 0 0">Kosongkan kalau tidak mau ada kalimat penutup. Contoh isi: Barang yang sudah dibeli tidak dapat ditukar.</p></div>
         <div class="form-row"><label class="lbl" for="setTax">PPN (%) pada setiap transaksi</label><input class="field" id="setTax" inputmode="decimal" autocomplete="off" placeholder="0 = tanpa pajak"></div>
         <div class="form-row"><label class="lbl" for="setMaxDisc">Diskon maksimal untuk kasir (%)</label><input class="field" id="setMaxDisc" inputmode="numeric" autocomplete="off" placeholder="0 = kasir tidak boleh kasih diskon"></div>
         <div class="form-row"><label class="lbl">Refund oleh kasir: barang kembali ke stok?</label><div class="pick-row" id="rfRsRow"></div></div>
@@ -475,6 +479,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       <div class="note" id="lowBan" hidden></div>
       <div class="section-head">
         <h2>Daftar produk</h2>
+        <button class="btn" type="button" data-act="lblOpen">Cetak label</button>
         <button class="btn primary" type="button" data-act="newProd">Tambah produk</button>
       </div>
       <div class="stats" id="pstats"></div>
@@ -544,6 +549,13 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   </section>
 
   <!-- RIWAYAT -->
+  <section id="view-beli" hidden aria-labelledby="tab-beli">
+    <div class="section-head"><h2>Pembelian barang</h2><button class="btn primary" type="button" data-act="purNew">Catat pembelian</button></div>
+    <div class="stats" id="purSum"></div>
+    <div class="pick-row" id="purTabs" style="margin:0 0 10px"></div>
+    <div class="plist" id="purList"></div>
+  </section>
+
   <section id="view-member" hidden aria-labelledby="tab-member">
     <div class="section-head"><h2>Member</h2><button class="btn primary" type="button" data-act="mbAdd">Tambah member</button></div>
     <div class="panel" id="mbBox" hidden></div>
@@ -643,7 +655,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='56',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='58',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
@@ -885,6 +897,71 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       S.store=next;
       if(!db)saveLocal();
     },
+    savePurchase:async function(rec){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var list=(Array.isArray(base.pur)?base.pur:[]).concat([rec]).slice(-600);
+      var sups=Array.isArray(base.sup)?base.sup.slice():[];
+      if(rec.sup&&rec.sup.id&&rec.sup.n&&!sups.some(function(x){return x.id===rec.sup.id;}))sups.push({id:rec.sup.id,n:rec.sup.n,ph:rec.sup.ph||''});
+      for(var i=0;i<rec.items.length;i++){
+        var it=rec.items[i],p=S.products.find(function(x){return x.id===it.i;});
+        if(!p)continue;
+        var patch={cost:it.c};
+        if(hasStock(p))patch.stock=Math.max(0,(+p.stock||0)+it.q);
+        if(db)await db.doc('products/'+p.id).update(patch);else Object.assign(p,patch);
+      }
+      var next=Object.assign({},base,{pur:list,sup:sups});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+    },
+    paySupplier:async function(rec){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var next=Object.assign({},base,{spp:(Array.isArray(base.spp)?base.spp:[]).concat([rec]).slice(-800)});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+    },
+    voidPurchase:async function(id){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var list=Array.isArray(base.pur)?base.pur:[],rec=list.find(function(x){return x.id===id;});
+      if(!rec)return;
+      for(var i=0;i<rec.items.length;i++){
+        var it=rec.items[i],p=S.products.find(function(x){return x.id===it.i;});
+        if(!p||!hasStock(p))continue;
+        var st=Math.max(0,(+p.stock||0)-it.q);
+        if(db)await db.doc('products/'+p.id).update({stock:st});else p.stock=st;
+      }
+      var next=Object.assign({},base,{pur:list.filter(function(x){return x.id!==id;})});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+    },
+    saveSupplier:async function(rec){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var list=(Array.isArray(base.sup)?base.sup:[]).slice(),i=list.findIndex(function(x){return x.id===rec.id;});
+      if(i>=0)list[i]=rec;else list.push(rec);
+      var next=Object.assign({},base,{sup:list});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+    },
+    deleteSupplier:async function(id){
+      need('products');
+      var base=S.store;
+      if(db){var snap=await db.doc('settings/store').get();base=snap.exists?snap.data():S.store;}
+      var next=Object.assign({},base,{sup:(Array.isArray(base.sup)?base.sup:[]).filter(function(x){return x.id!==id;})});
+      if(db){await db.doc('settings/store').set(next);}
+      S.store=next;
+      if(!db)saveLocal();
+    },
     addSale:async function(sale){
       need('sell');
       var ms=myShift();
@@ -933,6 +1010,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
 
   /* ---------- Turunan ---------- */
+  var footRaw=function(){return (S.store&&typeof S.store.foot==='string')?S.store.foot:'Terima kasih';};
   var shopName=function(){return (S.store&&S.store.name&&S.store.name.trim())||'Toko Saya';};
   function sortMode(){try{var v=localStorage.getItem('kasirku:sort');return ['az','new','old','top'].indexOf(v)>=0?v:'az';}catch(e){return 'az';}}
   function sortedProducts(){
@@ -1027,7 +1105,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     $('#cartShop').textContent=shopName();
     $('#today').textContent=longDate(new Date());
     if(u&&!tabOk(S.tab))S.tab=u.r==='admin'?'dash':'kasir';
-    ['dash','kasir','produk','riwayat','kasbon','member','laporan','akun'].forEach(function(t){
+    ['dash','kasir','produk','riwayat','kasbon','member','beli','laporan','akun'].forEach(function(t){
       var ok=!!u&&tabOk(t);
       $('#tab-'+t).hidden=!ok;
       $('#tab-'+t).setAttribute('aria-selected',String(ok&&S.tab===t));
@@ -1036,6 +1114,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     $('#who').hidden=!u;
     if(u)$('#who').innerHTML=esc(u.n)+' · '+(u.r==='admin'?'Admin':'Kasir')+hbBadge()+(u.r==='admin'?' <button class="btn small" type="button" data-act="adminOut" style="margin-left:6px;min-height:32px;padding:2px 12px">Keluar</button>':'');
     var si=$('#storeIn');if(document.activeElement!==si)si.value=(S.store&&S.store.name)||'';
+    [['storeAddr',(S.store&&S.store.addr)||''],['storeTel',(S.store&&S.store.tel)||''],['storeFoot',footRaw()]].forEach(function(x){var el=$('#'+x[0]);if(el&&document.activeElement!==el)el.value=x[1];});
     (function(){var el=$('#rfRsRow');if(el){var on=!(S.store&&(S.store.rfRs===0||S.store.rfRs==='0'));if(el.children.length===2){el.children[0].setAttribute('aria-pressed',String(on));el.children[1].setAttribute('aria-pressed',String(!on));}else el.innerHTML='<button class="chip" type="button" data-act="setRfRs" data-v="1" aria-pressed="'+on+'">Ya, otomatis kembali</button><button class="chip" type="button" data-act="setRfRs" data-v="0" aria-pressed="'+(!on)+'">Tidak kembali</button>';}})();
     [['setTax','tax'],['setMaxDisc','maxDisc'],['setLow','low']].forEach(function(x){var el=$('#'+x[0]);if(el&&document.activeElement!==el){var v=S.store&&S.store[x[1]];el.value=(v===undefined||v===null||v===0&&x[1]!=='low')?'':String(v);}});
     renderLogin();
@@ -1137,9 +1216,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function renderProducts(){
     var list=sortedProducts();
     var stockVal=0,low=0;
-    list.forEach(function(p){if(hasStock(p)){if(hasCost(p))stockVal+=p.cost*p.stock;if(p.stock<=lowLimit())low++;}});
+    list.forEach(function(p){if(hasStock(p)){if(hasCost(p))stockVal+=p.cost*p.stock;if(lowOf(p))low++;}});
     $('#pstats').innerHTML=list.length?'<div class="stat"><small>Produk</small><b>'+list.length+'</b></div><div class="stat"><small>Nilai stok (modal)</small><b>'+rp(stockVal)+'</b></div><div class="stat"><small>Stok menipis atau habis</small><b>'+low+'</b></div>':'';
-    var lowL=list.filter(function(p){return hasStock(p)&&p.stock<=lowLimit();});
+    var lowL=list.filter(function(p){return hasStock(p)&&lowOf(p);});
     var lb=$('#lowBan');lb.hidden=!lowL.length;
     if(lowL.length)lb.innerHTML='<p><b>'+lowL.length+' produk stok menipis atau habis:</b> '+lowL.slice(0,6).map(function(p){return esc(p.name)+' ('+p.stock+')';}).join(', ')+(lowL.length>6?', dan lainnya':'')+'.</p>';
     $('#plist').innerHTML=list.length?list.map(function(p){
@@ -1639,6 +1718,318 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(m&&S.method==='kasbon'&&!S.kbName){S.kbName=m.n;var ki=$('#kbNm');if(ki)ki.value=m.n;}
     renderMbStat();renderCart();
   }
+  /* ---------- Pembelian barang, pemasok, hutang, daftar belanja, laporan stok, label ---------- */
+  function supAll(){return (S.store&&Array.isArray(S.store.sup))?S.store.sup:[];}
+  function purAll(){return (S.store&&Array.isArray(S.store.pur))?S.store.pur:[];}
+  function sppAll(){return (S.store&&Array.isArray(S.store.spp))?S.store.spp:[];}
+  function supByName(n){var t=String(n||'').trim().toLowerCase();return t?supAll().find(function(x){return x.n.toLowerCase()===t;})||null:null;}
+  function purProds(){return S.products.filter(function(p){return !p.op;}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'id',{sensitivity:'base'});});}
+  function purPaid(r){return r.paid==null?r.total:Math.min(r.total,Math.max(0,r.paid));}
+  function debtOf(sid){
+    var d=0;
+    purAll().forEach(function(r){if(r.sup&&r.sup.id===sid)d+=r.total-purPaid(r);});
+    sppAll().forEach(function(x){if(x.sup===sid)d-=x.amt;});
+    return Math.max(0,d);
+  }
+  function debtAll(){return supAll().reduce(function(a,s){return a+debtOf(s.id);},0);}
+  function minOf(p){var m=parseInt(p&&p.min,10);return m>0?m:0;}
+  function lowOf(p){return hasStock(p)&&!p.op&&(+p.stock)<=(minOf(p)||lowLimit());}
+  function lastSupFor(pid){
+    var all=purAll();
+    for(var i=all.length-1;i>=0;i--){var r=all[i];if(r.sup&&r.items.some(function(it){return it.i===pid;}))return r.sup;}
+    return null;
+  }
+  function shopGroups(){
+    var g={},order=[];
+    S.products.forEach(function(p){
+      if(!lowOf(p))return;
+      var thr=minOf(p)||lowLimit(),target=Math.max(thr*2,thr+1),q=Math.max(1,target-(+p.stock||0));
+      var s=lastSupFor(p.id),key=s?s.id:'-';
+      if(!g[key]){g[key]={sup:s?(supAll().find(function(x){return x.id===s.id;})||s):null,items:[]};order.push(key);}
+      g[key].items.push({p:p,q:q});
+    });
+    var res=order.map(function(k){return g[k];});
+    res.sort(function(a,b){return (a.sup?0:1)-(b.sup?0:1)||(a.sup&&b.sup?a.sup.n.localeCompare(b.sup.n):0);});
+    res.forEach(function(x){x.items.sort(function(a,b){return String(a.p.name).localeCompare(String(b.p.name),'id',{sensitivity:'base'});});});
+    return res;
+  }
+  function shopText(g){
+    return 'Pesanan barang'+(g.sup?' untuk '+g.sup.n:'')+' dari '+shopName()+':\n'+g.items.map(function(i){return '- '+i.p.name+' x '+i.q;}).join('\n')+'\nTerima kasih.';
+  }
+  function waLink(ph,text){
+    var n=String(ph||'').replace(/\D/g,'');
+    if(n.charAt(0)==='0')n='62'+n.slice(1);
+    return 'https://wa.me/'+n+'?text='+encodeURIComponent(text);
+  }
+  function stokData(){
+    var to=todayKey(),from=addDays(to,-29),sold={};
+    Object.keys(S.days||{}).forEach(function(dk){
+      if(dk<from||dk>to)return;
+      (S.days[dk]||[]).forEach(function(s){s.items.forEach(function(it){sold[it.i]=(sold[it.i]||0)+it.q*(it.k||1);});});
+    });
+    var cost=0,sell=0,nocost=0,slow=[],fast=[];
+    S.products.forEach(function(p){
+      if(p.op||!hasStock(p)||p.stock<=0)return;
+      if(hasCost(p))cost+=p.cost*p.stock;else nocost++;
+      sell+=(+p.price||0)*p.stock;
+      var s=sold[p.id]||0;
+      if(!s)slow.push({p:p,tied:hasCost(p)?p.cost*p.stock:0});
+      else fast.push({p:p,rate:s/30,left:p.stock/(s/30),s:s});
+    });
+    slow.sort(function(a,b){return b.tied-a.tied||b.p.stock-a.p.stock;});
+    fast.sort(function(a,b){return a.left-b.left;});
+    return {cost:cost,sell:sell,nocost:nocost,slow:slow,fast:fast};
+  }
+  function renderStok(el){
+    var d=stokData();
+    var h='<div class="stats"><div class="stat"><small>Nilai stok (modal)</small><b>'+rp(d.cost)+'</b></div><div class="stat"><small>Nilai stok (harga jual)</small><b>'+rp(d.sell)+'</b></div></div>';
+    if(d.nocost)h+='<p class="hint">'+d.nocost+' produk belum diisi modalnya, jadi belum masuk nilai modal.</p>';
+    h+='<h3 class="sub-h">Paling cepat habis (laju jual 30 hari terakhir)</h3>';
+    h+=d.fast.length?'<div class="plist">'+d.fast.slice(0,10).map(function(x){
+      var days=Math.max(0,Math.round(x.left));
+      return '<div class="erow"><div class="einfo"><div class="en">'+esc(x.p.name)+'</div><div class="sub">Stok '+x.p.stock+' · terjual '+x.s+' dalam 30 hari</div></div><b class="ea">'+(days<=0?'Hari ini':'±'+days+' hari')+'</b><span></span></div>';
+    }).join('')+'</div>':'<div class="empty">Belum ada penjualan 30 hari terakhir untuk dihitung.</div>';
+    h+='<h3 class="sub-h" style="margin-top:16px">Tidak laku 30 hari (modal tertahan)</h3>';
+    h+=d.slow.length?'<div class="plist">'+d.slow.slice(0,20).map(function(x){
+      return '<div class="erow"><div class="einfo"><div class="en">'+esc(x.p.name)+'</div><div class="sub">Stok '+x.p.stock+(hasCost(x.p)?'':' · modal belum diisi')+'</div></div><b class="ea">'+(x.tied?rp(x.tied):'-')+'</b><span></span></div>';
+    }).join('')+(d.slow.length>20?'<p class="hint">Dan '+(d.slow.length-20)+' produk lainnya.</p>':'')+'</div>':'<div class="empty">Semua barang yang punya stok laku dalam 30 hari terakhir.</div>';
+    el.innerHTML=h;
+  }
+  function renderPurchase(){
+    if(S.tab!=='beli'||!can('products'))return;
+    var tab=S.purTab||'log',all=purAll().slice().reverse(),mk=todayKey().slice(0,7),groups=shopGroups();
+    var mon=all.filter(function(r){return String(r.k||'').slice(0,7)===mk;}),mt=mon.reduce(function(a,r){return a+r.total;},0);
+    $('#purSum').innerHTML='<div class="stat"><small>Pembelian bulan ini</small><b>'+rp(mt)+'</b></div><div class="stat"><small>Jumlah pembelian</small><b>'+mon.length+'</b></div><div class="stat"><small>Hutang ke pemasok</small><b>'+rp(debtAll())+'</b></div>';
+    var nl=groups.reduce(function(a,g){return a+g.items.length;},0);
+    function chip(v,t){return '<button class="chip" type="button" data-act="purTab" data-v="'+v+'" aria-pressed="'+(tab===v)+'">'+t+'</button>';}
+    $('#purTabs').innerHTML=chip('log','Riwayat')+chip('list','Daftar belanja'+(nl?' ('+nl+')':''))+chip('sup','Pemasok')+chip('stok','Laporan stok');
+    var el=$('#purList');
+    if(tab==='stok'){renderStok(el);return;}
+    if(tab==='list'){
+      el.innerHTML=groups.length?'<p class="hint" style="margin:0 0 4px">Barang yang stoknya sudah di batas minimum. Jumlah beli disarankan sampai dua kali batas minimum.</p>'+groups.map(function(g,ix){
+        var txt=shopText(g);
+        return '<div class="sum-box" style="padding:10px 14px"><p style="font-weight:700;margin:0 0 6px">'+esc(g.sup?g.sup.n:'Belum ada pemasok tercatat')+'</p>'
+          +g.items.map(function(i){return '<div class="sum-row"><span>'+esc(i.p.name)+' <small>(sisa '+i.p.stock+')</small></span><span>beli '+i.q+'</span></div>';}).join('')
+          +'<div class="modal-actions" style="margin-top:10px"><a class="btn small" target="_blank" rel="noopener" href="'+esc(waLink(g.sup&&g.sup.ph,txt))+'">Kirim WhatsApp</a><button class="btn small" type="button" data-act="shopCopy" data-g="'+ix+'">Salin</button><button class="btn small primary" type="button" data-act="shopBuy" data-g="'+ix+'">Catat pembelian</button></div></div>';
+      }).join(''):'<div class="empty">Semua stok masih di atas batas minimum. Batas minimum per produk diatur di form produk (kolom Stok minimum).</div>';
+      return;
+    }
+    if(tab==='sup'){
+      var tot={};all.forEach(function(r){var k=r.sup&&r.sup.id;if(k)tot[k]=(tot[k]||0)+r.total;});
+      el.innerHTML='<div class="modal-actions" style="margin:0 0 10px"><button class="btn" type="button" data-act="supNew">Tambah pemasok</button></div>'
+        +(supAll().length?supAll().slice().sort(function(a,b){return a.n.localeCompare(b.n,'id',{sensitivity:'base'});}).map(function(x){
+          var dt=debtOf(x.id);
+          return '<div class="erow"><div class="einfo"><div class="en">'+esc(x.n)+'</div><div class="sub">'+(x.ph?esc(x.ph)+' · ':'')+'Total beli '+rp(tot[x.id]||0)+(dt?' · Hutang '+rp(dt):'')+'</div></div>'
+            +(dt?'<button class="btn small primary" type="button" data-act="spOpen" data-id="'+esc(x.id)+'">Bayar</button>':'<span></span>')
+            +'<button class="btn small" type="button" data-act="supOpen" data-id="'+esc(x.id)+'">Ubah</button></div>';
+        }).join(''):'<div class="empty">Belum ada pemasok. Pemasok juga otomatis tersimpan saat mencatat pembelian.</div>');
+      return;
+    }
+    el.innerHTML=all.length?all.slice(0,150).map(function(r){
+      var d=new Date(r.t),dt=r.total-purPaid(r);
+      return '<div class="erow" style="align-items:flex-start"><div class="einfo"><div class="en">'+esc(r.sup&&r.sup.n?r.sup.n:'Tanpa pemasok')+' · '+rp(r.total)+'</div><div class="sub">'+esc(shortDate(d)+' '+tm(d))+(r.by?' · '+esc(r.by):'')+(dt>0?' · Belum dibayar '+rp(dt):'')+'</div>'
+        +'<div class="sub">'+r.items.map(function(i){return esc(i.n)+' ×'+i.q+' @'+fmt(i.c);}).join(', ')+'</div>'+(r.note?'<div class="sub">Catatan: '+esc(r.note)+'</div>':'')+'</div>'
+        +'<span></span><button class="btn small" type="button" data-act="purVoid" data-id="'+esc(r.id)+'">Batalkan</button></div>';
+    }).join(''):'<div class="empty">Belum ada pembelian. Tekan "Catat pembelian" saat barang dari pemasok datang. Stok bertambah dan modal produk ikut diperbarui ke harga beli terakhir.</div>';
+  }
+  function purRowHtml(r){
+    var opts='<option value="">Pilih produk</option>'+purProds().map(function(p){return '<option value="'+esc(p.id)+'" data-c="'+(+p.cost||0)+'"'+(r.i===p.id?' selected':'')+'>'+esc(p.name)+'</option>';}).join('');
+    return '<div class="pur-row" style="margin-bottom:12px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:8px"><select class="field pr-i" aria-label="Produk" style="grid-column:1/-1">'+opts+'</select>'
+      +'<input class="field pr-q" inputmode="numeric" autocomplete="off" placeholder="Jumlah beli" aria-label="Jumlah" value="'+(r.q||'')+'">'
+      +'<input class="field pr-c" inputmode="numeric" autocomplete="off" placeholder="Harga beli per item" aria-label="Harga beli per item" value="'+(r.c||'')+'"></div>';
+  }
+  function purReadRows(){
+    return [].slice.call(document.querySelectorAll('#purRows .pur-row')).map(function(e){
+      return {i:e.querySelector('.pr-i').value,q:parseInt((e.querySelector('.pr-q').value||'').replace(/\D/g,''),10)||0,c:parseInt((e.querySelector('.pr-c').value||'').replace(/\D/g,''),10)||0};
+    });
+  }
+  function purTotal(){
+    var t=purReadRows().reduce(function(a,r){return a+(r.i&&r.q>0&&r.c>0?r.q*r.c:0);},0);
+    var el=$('#purTot');if(el)el.textContent=rp(t);
+    var pd=$('#purPaid'),dbt=$('#purDebt');
+    if(pd&&dbt){
+      var raw=(pd.value||'').replace(/\D/g,''),paid=raw===''?t:parseInt(raw,10);
+      dbt.textContent=paid<t?rp(t-paid):'Lunas';
+    }
+  }
+  function purRows(list){
+    var el=$('#purRows');if(!el)return;
+    el.innerHTML=list.map(purRowHtml).join('');
+    purTotal();
+  }
+  function purDlg(pre){
+    pre=pre||{};
+    S.kbMode='pur';
+    var h='<div class="modal"><h2 id="kbTitle">Catat pembelian barang</h2>'
+      +'<label class="lbl" for="purSup" style="margin-top:0">Pemasok (ketik baru atau pilih)</label><input class="field" id="purSup" list="supList" maxlength="40" autocomplete="off" placeholder="Nama pemasok" value="'+esc(pre.sup||'')+'"><datalist id="supList">'+supAll().map(function(x){return '<option value="'+esc(x.n)+'">';}).join('')+'</datalist>'
+      +'<label class="lbl" for="purDate">Tanggal</label><input class="field" type="date" id="purDate" value="'+todayKey()+'">'
+      +'<label class="lbl">Barang yang dibeli</label><div id="purRows"></div>'
+      +'<button class="btn small" type="button" data-act="purAdd">+ Tambah baris</button>'
+      +lgField('purNote','Catatan (boleh kosong)','maxlength="80"')
+      +'<div class="sum-box" style="margin-top:10px"><div class="sum-row big"><span>Total pembelian</span><span id="purTot">Rp 0</span></div></div>'
+      +lgField('purPaid','Dibayar sekarang (kosong = lunas)','inputmode="numeric"')
+      +'<div class="sum-row"><span>Sisa hutang</span><span id="purDebt">Lunas</span></div>'
+      +'<p class="hint" style="margin:6px 0 0">Stok bertambah sebesar jumlah beli dan modal produk diganti dengan harga beli ini. Kalau dibayar kurang dari total, sisanya jadi hutang ke pemasok.</p>'
+      +'<div class="ac-foot"><p class="hint pin-err" id="kbErr" role="alert"></p><div class="modal-actions"><button class="btn grow" type="button" data-act="kbClose">Batal</button><button class="btn primary grow" type="button" id="purOk" data-act="purOk">Simpan</button></div></div></div>';
+    var el=$('#kbDlg');el.innerHTML=h;el.hidden=false;
+    purRows(pre.rows&&pre.rows.length?pre.rows:[{}]);
+    var rows=$('#purRows');
+    rows.addEventListener('input',purTotal);
+    $('#purPaid').addEventListener('input',purTotal);
+    rows.addEventListener('change',function(e){
+      var t=e.target;
+      if(t.classList.contains('pr-i')){var row=t.closest('.pur-row'),c=row.querySelector('.pr-c'),o=t.options[t.selectedIndex];if(c&&!c.value&&o&&+o.dataset.c)c.value=o.dataset.c;purTotal();}
+    });
+    setTimeout(function(){var f=$('#purSup');if(f)f.focus();},40);
+  }
+  async function purOk(){
+    if(S.kbBusy)return;
+    var rows=purReadRows().filter(function(r){return r.i||r.q||r.c;});
+    if(!rows.length){kbErr('Isi minimal satu barang.');return;}
+    var items=[];
+    for(var k=0;k<rows.length;k++){
+      var r=rows[k],p=S.products.find(function(x){return x.id===r.i;});
+      if(!p){kbErr('Baris '+(k+1)+': pilih produknya.');return;}
+      if(!(r.q>0)||r.q>100000){kbErr('Baris '+(k+1)+': jumlah harus 1 sampai 100.000.');return;}
+      if(!(r.c>0)){kbErr('Baris '+(k+1)+': isi harga beli per item.');return;}
+      items.push({i:p.id,n:p.name,q:r.q,c:r.c});
+    }
+    var total=items.reduce(function(a,i){return a+i.q*i.c;},0);
+    var praw=($('#purPaid').value||'').replace(/\D/g,''),paid=praw===''?total:parseInt(praw,10);
+    if(paid>total){kbErr('Yang dibayar tidak boleh lebih dari total.');return;}
+    var sn=($('#purSup').value||'').trim().slice(0,40),sup=null;
+    if(paid<total&&!sn){kbErr('Isi nama pemasok kalau ada hutang.');return;}
+    if(sn){var ex=supByName(sn);sup=ex?{id:ex.id,n:ex.n,ph:ex.ph||''}:{id:newId('m'),n:sn,ph:''};}
+    var dv=($('#purDate').value||todayKey()),now=new Date(),when=new Date(dv+'T'+pad(now.getHours())+':'+pad(now.getMinutes())+':00');
+    if(isNaN(when.getTime()))when=now;
+    var rec={id:newId('b'),t:when.toISOString(),k:dayKey(when),sup:sup,items:items,total:total,paid:paid,note:($('#purNote').value||'').trim().slice(0,80),by:me()?me().n:''};
+    S.kbBusy=true;var b=$('#purOk');if(b)b.disabled=true;
+    try{
+      await data.savePurchase(rec);
+      kbClose();renderAll();renderPurchase();
+      toast('Pembelian tersimpan. Stok dan modal diperbarui.');
+    }catch(e){fail(e);if(b)b.disabled=false;}
+    finally{S.kbBusy=false;}
+  }
+  function supDlg(id){
+    var x=id?supAll().find(function(s){return s.id===id;}):null;
+    if(id&&!x)return;
+    S.kbMode='sup';S.supEdit=id||'';
+    var h='<div class="modal"><h2 id="kbTitle">'+(x?'Pemasok':'Pemasok baru')+'</h2>'
+      +lgField('supN','Nama pemasok','maxlength="40" value="'+esc(x?x.n:'')+'"')
+      +lgField('supP','Nomor HP (boleh kosong)','maxlength="16" inputmode="tel" value="'+esc(x?(x.ph||''):'')+'"')
+      +'<div class="ac-foot"><p class="hint pin-err" id="kbErr" role="alert"></p><div class="modal-actions"><button class="btn grow" type="button" data-act="kbClose">Batal</button>'
+      +(x?'<button class="btn danger" type="button" data-act="supDel">Hapus</button>':'')
+      +'<button class="btn primary grow" type="button" data-act="supOk">Simpan</button></div></div></div>';
+    var el=$('#kbDlg');el.innerHTML=h;el.hidden=false;
+    setTimeout(function(){var f=$('#supN');if(f)f.focus();},40);
+  }
+  async function supOk(){
+    if(S.kbBusy)return;
+    var n=($('#supN').value||'').trim().slice(0,40),ph=($('#supP').value||'').replace(/[^\d+]/g,'').slice(0,16);
+    if(!n){kbErr('Isi nama pemasok.');return;}
+    var dup=supByName(n);if(dup&&dup.id!==S.supEdit){kbErr('Nama pemasok itu sudah ada.');return;}
+    S.kbBusy=true;
+    try{await data.saveSupplier({id:S.supEdit||newId('m'),n:n,ph:ph});kbClose();renderPurchase();toast('Pemasok disimpan.');}
+    catch(e){fail(e);}
+    finally{S.kbBusy=false;}
+  }
+  function spDlg(id){
+    var x=supAll().find(function(s){return s.id===id;});
+    if(!x)return;
+    var d=debtOf(id);
+    S.kbMode='sp';S.supEdit=id;
+    var hist=sppAll().filter(function(p){return p.sup===id;}).slice(-5).reverse().map(function(p){var dd=new Date(p.t);return '<p class="hint" style="margin:2px 0">'+esc(shortDate(dd))+' · bayar '+rp(p.amt)+(p.note?' · '+esc(p.note):'')+'</p>';}).join('');
+    var h='<div class="modal"><h2 id="kbTitle">Bayar hutang</h2>'
+      +'<div class="sum-box">'+sumRow('Pemasok',esc(x.n))+sumRow('Sisa hutang',rp(d),'big')+'</div>'
+      +lgField('spAmt','Jumlah dibayar (Rp)','inputmode="numeric" value="'+d+'"')
+      +lgField('spNote','Catatan (boleh kosong)','maxlength="60"')
+      +(hist?'<p style="font-weight:700;margin:8px 0 4px">Pembayaran terakhir</p>'+hist:'')
+      +'<div class="ac-foot"><p class="hint pin-err" id="kbErr" role="alert"></p><div class="modal-actions"><button class="btn grow" type="button" data-act="kbClose">Batal</button><button class="btn primary grow" type="button" data-act="spOk">Bayar</button></div></div></div>';
+    var el=$('#kbDlg');el.innerHTML=h;el.hidden=false;
+    setTimeout(function(){var f=$('#spAmt');if(f){f.focus();f.select();}},40);
+  }
+  async function spOk(){
+    if(S.kbBusy)return;
+    var id=S.supEdit,amt=parseInt((($('#spAmt')||{}).value||'').replace(/\D/g,''),10)||0,d=debtOf(id);
+    if(!(amt>0)){kbErr('Isi jumlah yang dibayar.');return;}
+    if(amt>d){kbErr('Melebihi sisa hutang ('+rp(d)+').');return;}
+    S.kbBusy=true;
+    try{
+      await data.paySupplier({id:newId('y'),t:new Date().toISOString(),k:todayKey(),sup:id,amt:amt,note:(($('#spNote')||{}).value||'').trim().slice(0,60),by:me()?me().n:''});
+      kbClose();renderPurchase();toast(amt>=d?'Hutang lunas.':'Pembayaran dicatat.');
+    }catch(e){fail(e);}
+    finally{S.kbBusy=false;}
+  }
+  /* Label harga dan barcode (lembar A4, EAN-13) */
+  function lblEligible(){return S.products.filter(function(p){return !p.op&&p.barcode&&eanValid(String(p.barcode).trim());}).sort(function(a,b){return String(a.name).localeCompare(String(b.name),'id',{sensitivity:'base'});});}
+  function lblDlg(){
+    var list=lblEligible(),skip=S.products.filter(function(p){return !p.op;}).length-list.length;
+    S.kbMode='lbl';
+    var h='<div class="modal"><h2 id="kbTitle">Cetak label barcode</h2>'
+      +(list.length?'<div class="modal-actions" style="margin:0 0 8px"><button class="btn small" type="button" data-act="lblAll" data-v="1">Pilih semua</button><button class="btn small" type="button" data-act="lblAll" data-v="0">Kosongkan</button></div>'
+        +'<div id="lblList" style="max-height:44vh;overflow:auto;display:flex;flex-direction:column;gap:6px">'
+        +list.map(function(p){return '<div class="erow" style="grid-template-columns:auto minmax(0,1fr) 64px"><input type="checkbox" class="lbl-ck" data-id="'+esc(p.id)+'" aria-label="Pilih '+esc(p.name)+'"><div><div class="en">'+esc(p.name)+'</div><div class="sub">'+rp(p.price)+' · '+esc(p.barcode)+'</div></div><input class="field lbl-n" inputmode="numeric" value="1" aria-label="Jumlah label '+esc(p.name)+'"></div>';}).join('')+'</div>'
+        +'<p class="hint">Kolom kanan = jumlah label per produk. Satu lembar A4 memuat 21 label (3 x 7), tinggal digunting.</p>'
+      :'<div class="empty">Belum ada produk dengan barcode EAN-13. Buka produk lalu tekan "Buat kode".</div>')
+      +(skip>0&&list.length?'<p class="hint">'+skip+' produk belum punya barcode EAN-13 yang valid, jadi tidak ditampilkan.</p>':'')
+      +'<div class="ac-foot"><p class="hint pin-err" id="kbErr" role="alert"></p><div class="modal-actions"><button class="btn grow" type="button" data-act="kbClose">Tutup</button>'
+      +(list.length?(canSave()?'<button class="btn grow" type="button" data-act="lblSave">Simpan gambar</button>':'')+'<button class="btn primary grow" type="button" data-act="lblPrint">Cetak</button>':'')
+      +'</div></div></div>';
+    var el=$('#kbDlg');el.innerHTML=h;el.hidden=false;
+  }
+  function lblPicked(){
+    var out=[];
+    [].slice.call(document.querySelectorAll('#lblList .erow')).forEach(function(row){
+      var ck=row.querySelector('.lbl-ck');if(!ck||!ck.checked)return;
+      var p=S.products.find(function(x){return x.id===ck.dataset.id;});if(!p)return;
+      var n=Math.min(100,Math.max(1,parseInt((row.querySelector('.lbl-n').value||'1').replace(/\D/g,''),10)||1));
+      for(var i=0;i<n;i++)out.push(p);
+    });
+    return out;
+  }
+  async function lblPages(list){
+    try{await Promise.all([document.fonts.load('600 14px "Schibsted Grotesk"'),document.fonts.load('600 16px "IBM Plex Mono"'),document.fonts.load('400 12px "IBM Plex Mono"')]);}catch(e){}
+    var SC=2,PW=794,PH=1123,LW=250,LH=150,COLS=3,ROWS=7,OX=Math.floor((PW-COLS*LW)/2),OY=Math.floor((PH-ROWS*LH)/2),per=COLS*ROWS,pages=[];
+    for(var s=0;s<list.length;s+=per){
+      var c=document.createElement('canvas');c.width=PW*SC;c.height=PH*SC;
+      var x=c.getContext('2d');x.scale(SC,SC);
+      x.fillStyle='#ffffff';x.fillRect(0,0,PW,PH);
+      x.textBaseline='top';
+      list.slice(s,s+per).forEach(function(p,ix){
+        var lx=OX+(ix%COLS)*LW,ly=OY+Math.floor(ix/COLS)*LH;
+        x.strokeStyle='#999999';x.lineWidth=1;x.setLineDash([3,3]);x.strokeRect(lx+.5,ly+.5,LW-1,LH-1);x.setLineDash([]);
+        x.fillStyle='#000000';x.textAlign='center';x.font='600 14px '+UIF;
+        var full=String(p.name),nm=full;
+        while(nm.length>1&&x.measureText(nm).width>LW-20)nm=nm.slice(0,-1);
+        if(nm!==full)nm=nm.replace(/\s+$/,'')+'…';
+        x.fillText(nm,lx+LW/2,ly+9);
+        drawEan(x,String(p.barcode).trim(),lx+30,ly+32,2,64,11,'#000000',MONO);
+        x.textAlign='center';x.font='600 16px '+MONO;x.fillStyle='#000000';
+        x.fillText('Rp '+fmt(p.price),lx+LW/2,ly+LH-26);
+      });
+      pages.push(await new Promise(function(res,rej){c.toBlob(function(b){b?res(b):rej(new Error('toBlob'));},'image/png');}));
+    }
+    return pages;
+  }
+  async function lblSave(){
+    var l=lblPicked();if(!l.length){kbErr('Centang produk yang mau dicetak.');return;}
+    try{
+      var pages=await lblPages(l);
+      for(var i=0;i<pages.length;i++)await saveBlob(pages[i],'label-barcode-'+(i+1)+'.png','Label disimpan ('+(i+1)+'/'+pages.length+').');
+    }catch(e){toast('Label tidak bisa dibuat.');}
+  }
+  async function lblPrint(){
+    var l=lblPicked();if(!l.length){kbErr('Centang produk yang mau dicetak.');return;}
+    try{
+      var pages=await lblPages(l),urls=pages.map(function(b){return URL.createObjectURL(b);});
+      var f=document.createElement('iframe');
+      f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+      f.srcdoc='<!doctype html><meta charset="utf-8"><style>@page{size:A4;margin:0}html,body{margin:0}img{display:block;width:210mm;height:297mm;page-break-after:always}</style>'+urls.map(function(u){return '<img src="'+u+'">';}).join('');
+      f.onload=function(){setTimeout(function(){try{f.contentWindow.focus();f.contentWindow.print();}catch(e){toast('Cetak tidak didukung di sini. Pakai Simpan gambar lalu cetak dari galeri.');}setTimeout(function(){f.remove();urls.forEach(function(u){URL.revokeObjectURL(u);});},60000);},300);};
+      document.body.appendChild(f);
+    }catch(e){toast('Label tidak bisa dibuat.');}
+  }
   function renderMember(){
     if(S.tab!=='member'||!can('member'))return;
     renderMbSet();
@@ -1771,10 +2162,23 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     return pad3(i>=0?i+1:arr.length);
   }
   function pad3(n){return String(n).padStart(3,'0');}
+  function wrapTxt(t,W){
+    t=String(t||'').trim();if(!t)return [];
+    var out=[],cur='';
+    t.split(/\s+/).forEach(function(w){
+      while(w.length>W){if(cur){out.push(cur);cur='';}out.push(w.slice(0,W));w=w.slice(W);}
+      var test=cur?cur+' '+w:w;
+      if(test.length>W&&cur){out.push(cur);cur=w;}else cur=test;
+    });
+    if(cur)out.push(cur);
+    return out;
+  }
   function receiptText(sale,W){
     W=W||32;var d=new Date(sale.t),out=[];
     var line=function(l,r){return l+' '.repeat(Math.max(1,W-l.length-r.length))+r;};
     out.push(shopName().toUpperCase());
+    wrapTxt(S.store&&S.store.addr,W).forEach(function(l){out.push(l);});
+    if(S.store&&S.store.tel)out.push('Telp '+S.store.tel);
     if(sale.refund)out.push('*** STRUK REFUND ***');
     out.push(shortDate(d)+' '+tm(d)+(sale.refund?'  Refund #':'  #')+saleNo(sale));
     if(sale.kn)out.push('Kasir: '+sale.kn);
@@ -1789,7 +2193,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       if(sale.reason)out.push('Alasan: '+sale.reason);
     }else if(sale.method==='tunai'){out.push(line('Tunai','Rp '+fmt(sale.cash)));out.push(line('Kembali','Rp '+fmt(sale.change)));}
     else{out.push(line('Bayar',mLabel(sale.method)));if(sale.method==='kasbon'&&sale.kb){out.push('Pelanggan: '+sale.kb.n);out.push('*** BELUM LUNAS ***');}}
-    out.push('');out.push(sale.refund?'Barang dikembalikan, terima kasih':'Terima kasih');
+    out.push('');
+    wrapTxt(sale.refund?'Barang dikembalikan, terima kasih':footRaw(),W).forEach(function(l){out.push(l);});
     return out.join('\n');
   }
   var lastReceipt=null,rcBlobP=null;
@@ -1818,10 +2223,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       else if(st.left>0&&st.why)rfBlock+='<p class="hint" style="padding:0 16px 10px">'+esc(st.why)+'</p>';
     }
     $('#receipt').innerHTML='<div class="rc"><div class="paper">'
-      +'<div class="paper-head"><div class="shop">'+esc(shopName())+'</div>'+(isRf?'<div class="sub"><b>STRUK REFUND</b></div>':'')+'<div class="sub">'+esc(shortDate(d))+' · '+tm(d)+' · '+(isRf?'Refund #':'#')+saleNo(sale)+'</div>'+(sale.kn?'<div class="sub">Kasir: '+esc(sale.kn)+'</div>':'')+(sale.mb?'<div class="sub">Member: '+esc(sale.mb.n)+'</div>':'')+'</div>'
+      +'<div class="paper-head"><div class="shop">'+esc(shopName())+'</div>'+((S.store&&S.store.addr)?'<div class="sub">'+esc(S.store.addr)+'</div>':'')+((S.store&&S.store.tel)?'<div class="sub">Telp '+esc(S.store.tel)+'</div>':'')+(isRf?'<div class="sub"><b>STRUK REFUND</b></div>':'')+'<div class="sub">'+esc(shortDate(d))+' · '+tm(d)+' · '+(isRf?'Refund #':'#')+saleNo(sale)+'</div>'+(sale.kn?'<div class="sub">Kasir: '+esc(sale.kn)+'</div>':'')+(sale.mb?'<div class="sub">Member: '+esc(sale.mb.n)+'</div>':'')+'</div>'
       +'<div class="rc-lines">'+rows+adjHtml+'<div class="rc-item sum big"><span>'+(isRf?'TOTAL REFUND':'TOTAL')+'</span><span>Rp '+fmt(sale.total)+'</span></div>'+pay+'</div>'
       +rfBlock
-      +'<div class="rc-foot">'+(isRf?'Barang dikembalikan, terima kasih':'Terima kasih')+'</div></div>'
+      +((isRf||footRaw())?'<div class="rc-foot">'+esc(isRf?'Barang dikembalikan, terima kasih':footRaw())+'</div>':'')+'</div>'
       +'<div class="rc-actions">'
       +(canShareAny?'<button class="btn primary" type="button" data-act="rcShare">Bagikan</button>':'')
       +(canSave()?'<button class="btn'+(canShareAny?'':' primary')+'" type="button" data-act="rcImage">Simpan gambar</button>':'')
@@ -1883,6 +2288,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       }
       var shopLines=(font('600',16),wrap(shopName().toUpperCase(),inner));
       shopLines.forEach(function(ln){center(ln,'600',16,INK,4);});
+      if(S.store&&S.store.addr){font('400',11);wrap(S.store.addr,inner).forEach(function(ln){center(ln,'400',11,MUTED,2);});}
+      if(S.store&&S.store.tel)center('Telp '+S.store.tel,'400',11,MUTED,2);
       if(sale.refund)center('STRUK REFUND','600',13,INK,4);
       center(shortDate(d)+' · '+tm(d)+' · '+(sale.refund?'Refund #':'#')+saleNo(sale),'400',12,MUTED,sale.kn?4:14);
       if(sale.kn)wrap('Kasir: '+sale.kn+(sale.mb?' · Member: '+sale.mb.n:''),inner).forEach(function(ln,k,a){center(ln,'400',12,MUTED,k===a.length-1?14:2);});
@@ -1912,7 +2319,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         pair('Kembali','Rp '+fmt(sale.change),'400',13,INK);
       }else{pair('Bayar',mLabel(sale.method),'400',13,INK);if(sale.method==='kasbon'&&sale.kb){pair('Pelanggan',sale.kb.n,'400',13,INK);center('BELUM LUNAS','600',13,INK,2);}}
       y+=8;
-      center(sale.refund?'Barang dikembalikan, terima kasih':'Terima kasih','400',12,MUTED,0);
+      font('400',12);
+      var ftx=sale.refund?'Barang dikembalikan, terima kasih':footRaw();
+      if(ftx)wrap(ftx,inner).forEach(function(ln){center(ln,'400',12,MUTED,2);});
       return y+P;
     }
     var H=paint(document.createElement('canvas').getContext('2d'),false)+M+8;
@@ -2160,6 +2569,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       +'<input class="field" id="edDlim" inputmode="numeric" autocomplete="off" placeholder="Contoh: 3" value="'+((p&&parseInt(p.dl,10)>0)?parseInt(p.dl,10):'')+'">'
       +'<p class="hint" id="edDhint" style="margin:6px 0 0"></p></div>'
       +'<div class="form-row"><label class="lbl" for="edStock">Stok (kosongkan kalau tidak dihitung)</label><input class="field" id="edStock" inputmode="numeric" autocomplete="off" placeholder="Contoh: 24" value="'+(p&&hasStock(p)?p.stock:'')+'"></div>'
+      +(p&&p.op?'':'<div class="form-row"><label class="lbl" for="edMin">Stok minimum produk ini (kosong = ikut pengaturan umum)</label><input class="field" id="edMin" inputmode="numeric" autocomplete="off" placeholder="Contoh: 10" value="'+((p&&minOf(p))?minOf(p):'')+'"><p class="hint" style="margin:6px 0 0">Kalau stok sudah sampai angka ini, produk masuk Daftar belanja di tab Pembelian.</p></div>')
       +(p&&p.op?'':'<div class="form-row"><label class="lbl" for="edAdd">Tambah stok masuk (boleh kosong)</label><input class="field" id="edAdd" inputmode="numeric" autocomplete="off" placeholder="Contoh: 10, dijumlahkan ke stok di atas"><p class="hint" id="edAddHint" style="margin:6px 0 0"></p></div>')
       +(p&&p.op?'':edUnitsHtml(p)+edTiersHtml(p))
       +'<div class="form-row"><label class="lbl" for="edBar">Barcode (boleh kosong)</label><input class="field" id="edBar" maxlength="32" autocomplete="off" placeholder="Scan, ketik, atau buat kode" value="'+esc(p?(p.barcode||''):(presetBarcode||''))+'">'
@@ -2225,6 +2635,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     else if(costRaw!=='')prod.cost=parseInt(costRaw,10);
     var addRaw=parseInt((($('#edAdd')||{}).value||'').replace(/\D/g,''),10)||0;
     if(stockRaw!=='')prod.stock=parseInt(stockRaw,10);
+    var minRaw=parseInt((($('#edMin')||{}).value||'').replace(/\D/g,''),10)||0;
+    if(minRaw>0&&!e.op)prod.min=Math.min(minRaw,100000);
     if(addRaw>0&&!e.op)prod.stock=(stockRaw!==''?parseInt(stockRaw,10):0)+addRaw;
     if(!e.op&&$('#edUn0')){var ur=edUnitsRead();if(ur.err){toast(ur.err);return;}if(ur.list.length)prod.units=ur.list;}
     if(!e.op&&$('#edTq0')){var tr=edTiersRead(price);if(tr.err){toast(tr.err);return;}if(tr.list.length)prod.tiers=tr.list;}
@@ -2255,7 +2667,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function stkTag(p){
     if(!hasStock(p))return '';
     if(p.stock<=0)return '<span class="stk out">Habis</span>';
-    return '<span class="stk'+(p.stock<=lowLimit()?' low':'')+'">Sisa '+p.stock+'</span>';
+    return '<span class="stk'+(lowOf(p)?' low':'')+'">Sisa '+p.stock+'</span>';
   }
   function edAddHint(){
     var el=$('#edAddHint');if(!el)return;
@@ -2362,9 +2774,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
     var NS_R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
     function sheetXml(sp,hasDraw){
-      var rows=sp.rows,maxC=0,sd='';
+      var rows=sp.rows,maxC=0,sd='',wd=[];
+      function has(l,i){return !!(l&&l.indexOf(i)>=0);}
       rows.forEach(function(r,ri){
-        var cs='',head=!!(sp.bold&&sp.bold.indexOf(ri)>=0);
+        var cs='',head=has(sp.bold,ri),ttl=has(sp.title,ri),sec=has(sp.sec,ri),hot=has(sp.hot,ri);
         if(sp.legacy){
           head=r.length===1&&typeof r[0]==='string'&&/^[A-Z0-9 ()\/.\-]+$/.test(r[0])&&r[0].length>3;
           if(!head&&r.length>1&&r.every(function(v){return typeof v==='string'||v==='';})&&ri>0&&rows[ri-1].length===1)head=true;
@@ -2372,15 +2785,27 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         r.forEach(function(v,ci){
           if(v===null||v===undefined||v==='')return;
           if(ci+1>maxC)maxC=ci+1;
-          var ref=col(ci)+(ri+1);
-          if(typeof v==='number'&&isFinite(v))cs+='<c r="'+ref+'"><v>'+Math.round(v)+'</v></c>';
-          else cs+='<c r="'+ref+'" t="inlineStr"'+(head?' s="1"':'')+'><is><t xml:space="preserve">'+xe(v)+'</t></is></c>';
+          var ref=col(ci)+(ri+1),ln;
+          if(typeof v==='number'&&isFinite(v)){
+            var rv=Math.round(v);ln=String(Math.abs(rv)).length+Math.floor((String(Math.abs(rv)).length-1)/3)+(rv<0?1:0);
+            cs+='<c r="'+ref+'"'+(sp.legacy?'':' s="'+(hot?6:2)+'"')+'><v>'+rv+'</v></c>';
+          }else{
+            ln=String(v).length;
+            var st=sp.legacy?(head?1:0):(ttl?4:(sec?5:(head?3:(hot?1:0))));
+            cs+='<c r="'+ref+'" t="inlineStr"'+(st?' s="'+st+'"':'')+'><is><t xml:space="preserve">'+xe(v)+'</t></is></c>';
+          }
+          if(!ttl&&!sec){if(head)ln=Math.min(ln,18);if(!(wd[ci]>=ln))wd[ci]=ln;}
         });
         sd+='<row r="'+(ri+1)+'">'+cs+'</row>';
       });
-      var w0=sp.legacy?34:24;
-      var cols='<cols><col min="1" max="1" width="'+w0+'" customWidth="1"/><col min="2" max="'+Math.max(maxC,2)+'" width="16" customWidth="1"/></cols>';
-      return H+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+NS_R+'">'+cols+'<sheetData>'+sd+'</sheetData>'+(hasDraw?'<drawing r:id="rId1"/>':'')+'</worksheet>';
+      var cols='<cols>';
+      for(var ci=0;ci<Math.max(maxC,2);ci++){
+        var w=sp.legacy?(ci===0?34:16):Math.min(42,Math.max(9,(wd[ci]||8)+3));
+        cols+='<col min="'+(ci+1)+'" max="'+(ci+1)+'" width="'+w+'" customWidth="1"/>';
+      }
+      cols+='</cols>';
+      var fz=(!sp.legacy&&has(sp.bold,0)&&rows.length>1)?'<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>':'';
+      return H+'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+NS_R+'">'+fz+cols+'<sheetData>'+sd+'</sheetData>'+(hasDraw?'<drawing r:id="rId1"/>':'')+'</worksheet>';
     }
     function chartXml(sp){
       var c=sp.chart,q="'"+sp.name.replace(/'/g,"''")+"'",n=sp.rows.length;
@@ -2424,7 +2849,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       ['_rels/.rels',H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
       ['xl/workbook.xml',H+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+NS_R+'"><sheets>'+wbSheets+'</sheets></workbook>'],
       ['xl/_rels/workbook.xml.rels',H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+wbRels+'<Relationship Id="rId'+(ns+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
-      ['xl/styles.xml',H+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs></styleSheet>']
+      ['xl/styles.xml',H+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE3B8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFC4500A"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="3" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/></cellXfs></styleSheet>']
     );
     var T=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);T[n]=c>>>0;}
     function crc(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
@@ -2448,45 +2873,38 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(!canSave()){toast('File tidak bisa disimpan di sini.');return;}
     var range=repRange(),from=range.from,to=range.to;
     var rep=computeReport(S.days,S.exp,from,to,S.refunds);
-    var L=[];var R=L;
-    R.push(['LAPORAN '+shopName()]);
-    R.push(['Periode',from===to?from:from+' sampai '+to]);
-    R.push(['Dibuat',dayKey(new Date())+' '+tm(new Date())]);
-    R.push([]);
-    R.push(['RINGKASAN','Rupiah']);
-    [['Penjualan',rep.sales],['Refund',-rep.ref],['Omzet bersih',rep.omzet],['PPN',rep.tax],['Modal barang terjual',rep.hpp],['Untung kotor',rep.gross],['Biaya operasional',rep.biaya],['Untung bersih',rep.net],['Diskon diberikan',rep.disc],['Jumlah transaksi',rep.trx],['Jumlah refund',rep.refTrx],['Item terjual (bersih)',rep.items]].concat((function(){var k=kbRange(from,to);return [['Kasbon dibuat (belum tentu dibayar)',k.sales],['Pelunasan kasbon diterima',k.pay],['Sisa kasbon belum lunas (saat ini)',k.out]];})()).forEach(function(r){R.push(r);});
-    R.push([]);
-    R.push(['TRANSAKSI']);
-    R.push(['Tanggal','Jam','No struk','Kasir','Member','Metode','Produk','Jumlah','Harga satuan','Modal satuan','Diskon barang','Subtotal','Diskon transaksi','PPN','Total transaksi']);
+    var kbr=kbRange(from,to),purR=purAll().filter(function(r){return r.k>=from&&r.k<=to;});
+    var RS=[['LAPORAN '+shopName()],['Periode',from===to?from:from+' sampai '+to],['Dibuat',dayKey(new Date())+' '+tm(new Date())],[],['Ringkasan','Rupiah']],hot=[];
+    function sm(l,v,h){if(h)hot.push(RS.length);RS.push([l,v]);}
+    sm('Penjualan',rep.sales);sm('Refund',-rep.ref);sm('Omzet bersih',rep.omzet,1);sm('PPN',rep.tax);sm('Modal barang terjual',rep.hpp);sm('Untung kotor',rep.gross,1);sm('Biaya operasional',rep.biaya);sm('Untung bersih',rep.net,1);sm('Diskon diberikan',rep.disc);
+    sm('Jumlah transaksi',rep.trx);sm('Jumlah refund',rep.refTrx);sm('Item terjual (bersih)',rep.items);
+    RS.push([]);RS.push(['Kasbon pelanggan','Rupiah']);var kh=RS.length-1;
+    sm('Kasbon dibuat (belum tentu dibayar)',kbr.sales);sm('Pelunasan kasbon diterima',kbr.pay);sm('Sisa kasbon belum lunas (saat ini)',kbr.out);
+    RS.push([]);RS.push(['Pembelian barang','Rupiah']);var ph=RS.length-1;
+    sm('Total pembelian pada periode',purR.reduce(function(a,r){return a+r.total;},0));sm('Hutang ke pemasok (saat ini)',debtAll(),1);
+    var sh=[{name:'Ringkasan',rows:RS,title:[0],bold:[4,kh,ph],hot:hot}];
+    var TR=[['Tanggal','Jam','No struk','Kasir','Member','Metode','Produk','Jumlah','Harga satuan','Modal satuan','Diskon barang','Subtotal','Diskon transaksi','PPN','Total transaksi']];
     Object.keys(S.days).filter(function(k){return k>=from&&k<=to;}).sort().forEach(function(k){
-      (S.days[k]||[]).forEach(function(sl){
+      (S.days[k]||[]).slice().sort(function(a,b){return String(a.t)<String(b.t)?-1:(String(a.t)>String(b.t)?1:0);}).forEach(function(sl){
         var kas=userName(saleOwner(sl),sl.kn),no=saleNo(sl),jam=tm(new Date(sl.t));
         sl.items.forEach(function(i,ix){
-          R.push([k,jam,no,kas,sl.mb?sl.mb.n:'',mLabel(sl.method),i.n,i.q,i.p,typeof i.c==='number'?i.c:'',i.d||0,i.p*i.q-(i.d||0),ix===0?(sl.dc||0):'',ix===0?(sl.tx||0):'',ix===0?sl.total:'']);
+          TR.push([k,jam,no,kas,sl.mb?sl.mb.n:'',mLabel(sl.method),i.n,i.q,i.p,typeof i.c==='number'?i.c:'',i.d||0,i.p*i.q-(i.d||0),ix===0?(sl.dc||0):'',ix===0?(sl.tx||0):'',ix===0?sl.total:'']);
         });
       });
     });
-    R.push([]);
-    R.push(['REFUND']);
-    R.push(['Tanggal','Jam','Dari struk','Kasir','Metode','Alasan','Produk','Jumlah','Harga satuan','Total refund']);
+    sh.push({name:'Transaksi',bold:[0],rows:TR});
+    var RF=[['Tanggal','Jam','Dari struk','Kasir','Metode','Alasan','Produk','Jumlah','Harga satuan','Total refund']];
     Object.keys(S.refunds||{}).filter(function(k){return k>=from&&k<=to;}).sort().forEach(function(k){
       (S.refunds[k]||[]).forEach(function(r){
         var jam=tm(new Date(r.t));
-        (r.items||[]).forEach(function(i,ix){
-          R.push([k,jam,r.sn,r.kn||'',mLabel(r.method),r.reason||'',i.n,i.q,i.p,ix===0?r.amt:'']);
-        });
+        (r.items||[]).forEach(function(i,ix){RF.push([k,jam,r.sn,r.kn||'',mLabel(r.method),r.reason||'',i.n,i.q,i.p,ix===0?r.amt:'']);});
       });
     });
-    R.push([]);
-    R.push(['BIAYA OPERASIONAL']);
-    R.push(['Tanggal','Nama biaya','Jumlah']);
-    rep.exps.forEach(function(x){R.push([x.k,x.e.n,x.e.a]);});
-    R.push([]);
-    R.push(['PER PRODUK']);
-    R.push(['Produk','Terjual','Omzet','Modal','Untung']);
-    rep.prods.forEach(function(b){R.push([b.n,b.q,b.rev,b.cost,b.rev-b.cost]);});
+    if(RF.length>1)sh.push({name:'Refund',bold:[0],rows:RF});
+    var BY=[['Tanggal','Nama biaya','Jumlah']];
+    rep.exps.forEach(function(x){BY.push([x.k,x.e.n,x.e.a]);});
+    if(BY.length>1)sh.push({name:'Biaya',bold:[0],rows:BY});
     var an=repAnalytics(from,to),cmp=repCompare(from,to);
-    var sh=[{name:'Laporan',rows:R,legacy:1}];
     var hd=[['Tanggal','Omzet bersih','Transaksi']];
     sh.push({name:'Per hari',bold:[0],chart:{kind:'col',title:'Penjualan per hari',vals:[1]},rows:hd.concat(an.days.slice(-366).map(function(d){return [d.k.slice(8)+'/'+d.k.slice(5,7),d.omzet,d.trx];}))});
     sh.push({name:'Per jam',bold:[0],chart:{kind:'col',title:'Penjualan per jam',vals:[1]},rows:[['Jam','Omzet','Transaksi']].concat(an.hours.map(function(x){return [pad(x.h)+':00',x.omzet,x.trx];}))});
@@ -2497,6 +2915,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       ['Omzet bersih',cmp.a.omzet,cmp.b.omzet,pctChg(cmp.a.omzet,cmp.b.omzet)===null?'':pctChg(cmp.a.omzet,cmp.b.omzet)],
       ['Untung bersih',cmp.a.net,cmp.b.net,pctChg(cmp.a.net,cmp.b.net)===null?'':pctChg(cmp.a.net,cmp.b.net)],
       ['Transaksi',cmp.a.trx,cmp.b.trx,pctChg(cmp.a.trx,cmp.b.trx)===null?'':pctChg(cmp.a.trx,cmp.b.trx)]]});
+    sh.push({name:'Semua produk',bold:[0],rows:[['Produk','Terjual','Omzet','Modal','Untung']].concat(rep.prods.map(function(b){return [b.n,b.q,b.rev,b.cost,b.rev-b.cost];}))});
+    var prr=[['Tanggal','Pemasok','Produk','Jumlah','Harga beli','Subtotal','Total nota','Dibayar','Sisa hutang']];
+    purR.forEach(function(r){r.items.forEach(function(i,ix){prr.push([r.k,r.sup?r.sup.n:'',i.n,i.q,i.c,i.q*i.c,ix===0?r.total:'',ix===0?purPaid(r):'',ix===0?r.total-purPaid(r):'']);});});
+    if(prr.length>1)sh.push({name:'Pembelian',bold:[0],rows:prr});
+    var dr=[['Pemasok','Total beli','Total dibayar','Sisa hutang']];
+    supAll().forEach(function(x){
+      var tb=0,pd=0;purAll().forEach(function(r){if(r.sup&&r.sup.id===x.id){tb+=r.total;pd+=purPaid(r);}});
+      sppAll().forEach(function(y){if(y.sup===x.id)pd+=y.amt;});
+      dr.push([x.n,tb,Math.min(pd,tb),debtOf(x.id)]);
+    });
+    if(dr.length>1)sh.push({name:'Hutang pemasok',bold:[0],rows:dr});
     var blob=xlsxBook(sh);
     saveBlob(blob,'laporan-'+from+(to!==from?'_sd_'+to:'')+'.xlsx','File Excel disimpan.','File tidak bisa disimpan di sini.');
   }
@@ -2680,14 +3109,14 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     admin:['sell','refund.own','refund.any','dashboard','history.all','history.own','report','products','settings','accounts','shift.open','shift.close.own','shift.close.any','kasbon','member'],
     kasir:['sell','refund.own','history.own','shift.open','shift.close.own','kasbon','member']
   };
-  var TAB_PERM={dash:'dashboard',kasir:'sell',produk:'products',riwayat:'history.own',kasbon:'kasbon',member:'member',laporan:'report',akun:'accounts'};
+  var TAB_PERM={dash:'dashboard',kasir:'sell',produk:'products',riwayat:'history.own',kasbon:'kasbon',member:'member',beli:'products',laporan:'report',akun:'accounts'};
   var ACT_PERM={
     newProd:'products',editProd:'products',edSave:'products',edDel:'products',edPick:'products',edClearImg:'products',
     genCode:'products',edBarImg:'products',edScan:'products',regUnknown:'products',delSamples:'products',
     addExp:'report',delExp:'report',rep:'report',shiftView:'report',repPrint:'report',
     adminOut:'accounts',holdAsk:'sell',holdOk:'sell',holdList:'sell',holdOpen:'sell',holdDel:'sell',bkSave:'accounts',thAcc:'accounts',rsAsk:'accounts',shOn:'accounts',shNew:'accounts',shQr:'accounts',shStk:'accounts',shBlk:'accounts',rsGo:'accounts',rsBk:'accounts',stkAdd:'products',stkQ:'products',stkOk:'products',bkShare:'accounts',bkShift:'accounts',bkOutGo:'accounts',bkOutSkip:'accounts',bkPick:'accounts',bkGo:'accounts',bkCancel:'accounts',acAdd:'accounts',acEdit:'accounts',acToggle:'accounts',acSelf:'accounts',acOk:'accounts',acStatus:'accounts',acNewRec:'accounts',
     add:'sell',inc:'sell',dec:'sell',rm:'sell',clear:'sell',pay:'sell',method:'sell',quick:'sell',scan:'sell',
-    mbSw:'accounts',stayMode:'accounts',hbMode:'accounts',hbNew:'accounts',hbJoin:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
+    purNew:'products',spOpen:'products',spOk:'products',shopCopy:'products',shopBuy:'products',lblOpen:'products',lblAll:'products',lblSave:'products',lblPrint:'products',purAdd:'products',purOk:'products',purVoid:'products',purTab:'products',supNew:'products',supOpen:'products',supOk:'products',supDel:'products',mbSw:'accounts',stayMode:'accounts',hbMode:'accounts',hbNew:'accounts',hbJoin:'accounts',mbAllOk:'products',mbDefOk:'accounts',mbOpen:'member',mbAdd:'member',mbNew:'member',mbOk:'member',mbDel:'products',
     kbPw:'sell',kbCode:'sell',kbMon:'sell',kbPwOk:'sell',kbCodeOk:'sell',kbClose:'sell',kbOpen:'kasbon',kbAll:'kasbon',kbPayOk:'kasbon',kbPm:'kasbon',kbFull:'kasbon',kbBack:'kasbon',
     kbSw:'accounts',kbGen:'accounts',kbGenOk:'accounts',kbDelCodes:'accounts',shKb:'accounts',kbCopy:'accounts',
     shiftOpen:'shift.open',shiftClose:'shift.close.own',
@@ -3592,7 +4021,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       var pf=b.rev-b.cost;
       return '<div class="pr-row"><span class="pn">'+esc(b.n)+'<small>'+b.q+' terjual</small></span><span class="rv">'+rp(b.rev)+'</span><span class="pf'+(pf<0?' neg':'')+'">'+rpS(pf)+'</span></div>';
     }).join(''):'<div class="empty">Belum ada penjualan hari ini.</div>';
-    var low=S.products.filter(function(p){return hasStock(p)&&p.stock<=lowLimit();}).sort(function(a,b){return a.stock-b.stock;}).slice(0,8);
+    var low=S.products.filter(function(p){return hasStock(p)&&lowOf(p);}).sort(function(a,b){return a.stock-b.stock;}).slice(0,8);
     $('#dLow').innerHTML=low.length?low.map(function(p){
       return '<div class="erow"><div class="einfo"><div class="en">'+esc(p.name)+'</div></div><b class="ea">'+(p.stock<=0?'Habis':'Sisa '+p.stock)+'</b><span></span></div>';
     }).join(''):'<div class="empty">Semua stok aman.</div>';
@@ -3871,6 +4300,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     if(t==='laporan')renderReport();
     if(t==='kasbon')renderKasbon();
     if(t==='member')renderMember();
+    if(t==='beli')renderPurchase();
     renderChrome();
     window.scrollTo(0,0);
   }
@@ -3916,6 +4346,23 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       case 'mbDefOk':(function(){var v=Math.min(100,parseInt((($('#mbDef')||{}).value||'').replace(/\D/g,''),10)||0);data.saveSettings({mbd:v}).then(function(){renderMbSet();renderCart();toast('Diskon member umum disimpan: '+v+'%.');}).catch(fail);})();break;
       case 'mbAllOk':(function(){var raw=(($('#mbAll')||{}).value||'').replace(/\D/g,'');if(raw===''){toast('Isi persen diskonnya dulu (isi 0 untuk meniadakan).');return;}var v=Math.min(100,parseInt(raw,10)||0);data.setAllMemberDisc(v).then(function(n){renderMember();renderMbSet();renderCart();toast('Diskon member '+v+'% diterapkan ke '+n+' member.');}).catch(fail);})();break;
       case 'mbOpen':mbDlg(id);break;
+      case 'purTab':S.purTab=b.dataset.v;renderPurchase();break;
+      case 'purNew':purDlg();break;
+      case 'purAdd':(function(){var cur=purReadRows();if(cur.length>=30){toast('Maksimal 30 baris.');return;}cur.push({});purRows(cur);})();break;
+      case 'purOk':purOk();break;
+      case 'purVoid':(function(){var r=purAll().find(function(x){return x.id===id;});if(!r)return;if(!confirm('Batalkan pembelian ini? Stok barang yang masuk dikurangi lagi. Modal produk tidak dikembalikan ke harga sebelumnya.'))return;data.voidPurchase(id).then(function(){renderAll();renderPurchase();toast('Pembelian dibatalkan.');}).catch(fail);})();break;
+      case 'supNew':supDlg('');break;
+      case 'spOpen':spDlg(id);break;
+      case 'spOk':spOk();break;
+      case 'shopCopy':(function(){var g=shopGroups()[parseInt(b.dataset.g,10)];if(g)copyText(shopText(g),'Daftar belanja disalin.');})();break;
+      case 'shopBuy':(function(){var g=shopGroups()[parseInt(b.dataset.g,10)];if(!g)return;purDlg({sup:g.sup?g.sup.n:'',rows:g.items.map(function(i){return {i:i.p.id,q:i.q,c:hasCost(i.p)&&i.p.cost>0?i.p.cost:''};})});})();break;
+      case 'lblOpen':lblDlg();break;
+      case 'lblAll':[].slice.call(document.querySelectorAll('#lblList .lbl-ck')).forEach(function(c){c.checked=b.dataset.v==='1';});break;
+      case 'lblSave':lblSave();break;
+      case 'lblPrint':lblPrint();break;
+      case 'supOpen':supDlg(id);break;
+      case 'supOk':supOk();break;
+      case 'supDel':(function(){if(!S.supEdit)return;if(debtOf(S.supEdit)>0){kbErr('Pemasok ini masih punya hutang. Lunasi dulu.');return;}data.deleteSupplier(S.supEdit).then(function(){kbClose();renderPurchase();toast('Pemasok dihapus. Riwayat pembelian tetap ada.');}).catch(fail);})();break;
       case 'mbAdd':mbDlg('');break;
       case 'mbNew':mbDlg('',($('#mbIn')||{}).value||'');break;
       case 'mbOk':mbOk();break;
@@ -4178,6 +4625,10 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     }else if(t.id==='storeIn'){
       var name=t.value.trim();
       try{await data.saveStore(name);if(!db){renderChrome();}toast('Nama toko disimpan.');}catch(err){fail(err);}
+    }else if(t.id==='storeAddr'||t.id==='storeTel'||t.id==='storeFoot'){
+      var pk=t.id==='storeAddr'?'addr':(t.id==='storeTel'?'tel':'foot'),pv=t.value.trim();
+      var pp={};pp[pk]=pv;
+      try{await data.saveSettings(pp);if(!db)renderAll();toast('Pengaturan struk disimpan.');}catch(err3){fail(err3);}
     }else if(t.id==='setTax'||t.id==='setMaxDisc'||t.id==='setLow'){
       var raw=String(t.value).replace(',','.').replace(/[^0-9.]/g,''),num=raw===''?0:parseFloat(raw);
       if(!isFinite(num))num=0;
@@ -6147,7 +6598,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   /* Satu perangkat jadi pusat. Perangkat kasir lain tersambung (WebRTC) dan semua perubahan dikirim sebagai operasi.
      Pusat menjalankan operasi itu, lalu menyiarkannya ke kasir lain. Kalau kasir offline, operasi antre dan dikirim saat tersambung lagi. */
   var HB_KEY='kasirku:hub',HQ_KEY='kasirku:hubq',HD_KEY='kasirku:hubdone',HB_CH=12000;
-  var HB_SYNC=['saveProduct','deleteProducts','saveStore','saveSettings','saveUsers','saveShift','setStock','addStock','addExpense','deleteExpense','addRefund','saveMember','setAllMemberDisc','deleteMember','useKbCode','genKbCode','clearKbCodes','addKbPay','addSale'];
+  var HB_SYNC=['saveProduct','deleteProducts','saveStore','saveSettings','saveUsers','saveShift','setStock','addStock','addExpense','deleteExpense','addRefund','saveMember','setAllMemberDisc','deleteMember','useKbCode','genKbCode','clearKbCodes','addKbPay','addSale','savePurchase','paySupplier','voidPurchase','saveSupplier','deleteSupplier'];
   var HB_RAW={};
   function hbCfg(){try{var j=JSON.parse(localStorage.getItem(HB_KEY)||'null');return (j&&(j.role==='hub'||j.role==='sat')&&j.code)?j:null;}catch(e){return null;}}
   function hbSave(c){try{if(c)localStorage.setItem(HB_KEY,JSON.stringify(c));else localStorage.removeItem(HB_KEY);}catch(e){}}
