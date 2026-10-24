@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#C4500A">
+<meta name="theme-color" content="#1D6B7C">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
-<title>Kasirku</title>
+<title>Kasva</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap">
@@ -50,12 +50,15 @@
 
 /* ===== tema warna: selalu terang, tidak ikut mode gelap HP ===== */
 :root[data-accent="orange"]{--bg:#FFF8EC;--surface:#FFFDF7;--raised:#FFFFFF;--ink:#2B1A0E;--muted:#7A5B3A;--line:#F0DCB8;--accent:#C84E08;--accent-ink:#FFFFFF;--accent-soft:#FFE8BF;--paper-line:#E6CFA6;--shadow:0 1px 2px rgba(150,80,0,.10),0 8px 24px rgba(150,80,0,.10)}
+:root[data-accent="kasva"]{--bg:#F1F9F7;--surface:#FAFEFD;--raised:#FFFFFF;--ink:#12214A;--muted:#4C6573;--line:#D0E5E0;--accent:#1D6B7C;--accent-ink:#FFFFFF;--accent-soft:#D5F4E9;--paper-line:#C3DCD6;--shadow:0 1px 2px rgba(18,33,74,.08),0 8px 24px rgba(18,33,74,.09)}
 :root[data-accent="blue"]{--accent:#1D5FD1;--accent-ink:#FFFFFF;--accent-soft:#DCE8FB}
 :root[data-accent="pink"]{--accent:#B3195A;--accent-ink:#FFFFFF;--accent-soft:#FADCE8}
 .top{border-top:4px solid var(--accent)}
 :root[data-accent="orange"] .top{border-top:0;background-color:var(--bg);background-image:linear-gradient(90deg,#F57C0F,#FFC83D);background-size:100% 6px;background-repeat:no-repeat}
 .tile{border-radius:18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .dbadge{position:absolute;top:8px;left:8px;z-index:2;padding:2px 9px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font:700 11px var(--font-ui);letter-spacing:.02em;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+:root[data-accent="kasva"] .top{border-top:0;background-color:var(--bg);background-image:linear-gradient(90deg,#1E2E61,#257A81,#25D39C);background-size:100% 6px;background-repeat:no-repeat}
+:root[data-accent="kasva"] .dbadge{background:#25D39C;color:#06301F}
 :root[data-accent="orange"] .dbadge{background:#FFC83D;color:#3A2200}
 
 *{box-sizing:border-box}
@@ -670,12 +673,12 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='59',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='60',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
-  var ACC={orange:['Oranye','#C4500A'],tosca:['Tosca','#0A6B66'],blue:['Biru','#1D5FD1'],pink:['Raspberi','#B3195A']};
-  function accGet(){try{var v=localStorage.getItem(AC_KEY);return ACC[v]?v:'orange';}catch(e){return 'orange';}}
+  var ACC={kasva:['Kasva','#1D6B7C'],orange:['Oranye','#C4500A'],tosca:['Tosca','#0A6B66'],blue:['Biru','#1D5FD1'],pink:['Raspberi','#B3195A']};
+  function accGet(){try{var v=localStorage.getItem(AC_KEY);return ACC[v]?v:'kasva';}catch(e){return 'kasva';}}
   function modeGet(){try{var v=localStorage.getItem(MD_KEY);return (v==='light'||v==='dark')?v:'auto';}catch(e){return 'auto';}}
   function themeApply(){
     var a=accGet(),m=modeGet(),r=document.documentElement;
@@ -3359,7 +3362,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     }
     function chartXml(sp){
       var c=sp.chart,q="'"+sp.name.replace(/'/g,"''")+"'",n=sp.rows.length;
-      var colors=['C4500A','F2A93B','1B7F3B','3B6FD1'];
+      var colors=['1D6B7C','25D39C','1E2E61','3B6FD1'];
       var ser=c.vals.map(function(v,i){
         return '<c:ser><c:idx val="'+i+'"/><c:order val="'+i+'"/><c:tx><c:strRef><c:f>'+q+'!$'+col(v)+'$1</c:f></c:strRef></c:tx><c:spPr><a:solidFill><a:srgbClr val="'+colors[i%4]+'"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>'
           +'<c:cat><c:strRef><c:f>'+q+'!$A$2:$A$'+n+'</c:f></c:strRef></c:cat><c:val><c:numRef><c:f>'+q+'!$'+col(v)+'$2:$'+col(v)+'$'+n+'</c:f></c:numRef></c:val></c:ser>';
@@ -3399,7 +3402,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
       ['_rels/.rels',H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
       ['xl/workbook.xml',H+'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="'+NS_R+'"><sheets>'+wbSheets+'</sheets></workbook>'],
       ['xl/_rels/workbook.xml.rels',H+'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+wbRels+'<Relationship Id="rId'+(ns+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
-      ['xl/styles.xml',H+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFE3B8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FFC4500A"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="3" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/></cellXfs></styleSheet>']
+      ['xl/styles.xml',H+'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD5F4E9"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF1D6B7C"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="3" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="3" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/></cellXfs></styleSheet>']
     );
     var T=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);T[n]=c>>>0;}
     function crc(b){var c=0xFFFFFFFF;for(var i=0;i<b.length;i++)c=T[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
@@ -3770,7 +3773,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var msg=S.lmsg?'<p class="hint" style="margin:0 0 12px">'+esc(S.lmsg)+'</p>':'';
     var err='<p class="hint pin-err" id="lgErr" role="alert"></p>';
     if(mode==='loading'){
-      h+='<h2 id="lgTitle">Kasirku</h2><p class="intro">Memuat data…</p>';
+      h+='<h2 id="lgTitle">Kasva</h2><p class="intro">Memuat data…</p>';
     }else if(mode==='setup'){
       h+='<h2 id="lgTitle">Buat akun Admin</h2><p class="intro">Akun pertama ini adalah Admin dengan akses penuh. Akun kasir ditambah sesudahnya di tab Akun.</p>'+msg
         +(legacy?lgField('lgOld','PIN admin lama (atau kode pemulihan)','maxlength="12"'):'')
@@ -4432,7 +4435,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function bkBuild(){
     var obj={app:'kasirku',ver:1,at:new Date().toISOString(),products:S.products,store:S.store,days:S.days,exp:S.exp,shifts:S.shifts,refunds:S.refunds};
     var d=new Date();
-    return {blob:new Blob([JSON.stringify(obj)],{type:'application/json'}),fn:'kasirku-cadangan-'+dayKey(d)+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json'};
+    return {blob:new Blob([JSON.stringify(obj)],{type:'application/json'}),fn:'kasva-cadangan-'+dayKey(d)+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json'};
   }
   /* true = cadangan berhasil dibagikan; false = dibatalkan atau gagal */
   async function bkShare(){
@@ -4477,14 +4480,14 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     fr.onerror=function(){toast('File tidak bisa dibaca.');};
     fr.onload=function(){
       var j;
-      try{j=JSON.parse(String(fr.result));}catch(e){toast('Ini bukan file cadangan Kasirku.');return;}
+      try{j=JSON.parse(String(fr.result));}catch(e){toast('Ini bukan file cadangan Kasva.');return;}
       var ok=j&&j.app==='kasirku'&&Array.isArray(j.products)&&j.store&&typeof j.store==='object'&&!Array.isArray(j.store)
         &&['days','exp','shifts','refunds'].every(function(k){return j[k]&&typeof j[k]==='object'&&!Array.isArray(j[k]);})
         &&j.products.every(function(x){return x&&typeof x==='object'&&x.id;})
         &&Object.keys(j.days).every(function(k){return Array.isArray(j.days[k]);})
         &&Object.keys(j.exp).every(function(k){return Array.isArray(j.exp[k]);})
         &&Object.keys(j.refunds).every(function(k){return Array.isArray(j.refunds[k]);});
-      if(!ok){toast('Ini bukan file cadangan Kasirku yang valid.');return;}
+      if(!ok){toast('Ini bukan file cadangan Kasva yang valid.');return;}
       S.bk={products:j.products,store:j.store,days:j.days,exp:j.exp,shifts:j.shifts,refunds:j.refunds};
       var nd=Object.keys(j.days).length,ns=0;Object.keys(j.days).forEach(function(k){ns+=j.days[k].length;});
       var na=Array.isArray(j.store.users)?j.store.users.length:0,at=j.at?new Date(j.at):null;
@@ -6886,7 +6889,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   function vwScanned(code){
     var m=/#kv=([A-Za-z0-9]{8})([cm])/.exec(String(code||''));
     var h=$('#scanHint');
-    if(!m){if(h)h.textContent='Ini bukan QR Kasirku. Coba QR di tab Akun layar kasir.';return;}
+    if(!m){if(h)h.textContent='Ini bukan QR Kasva. Coba QR di tab Akun layar kasir.';return;}
     VW.code=shNorm(m[1]);VW.mode=m[2]==='m'?'mon':'cust';VW.pin='';
     buzz();stopScanner();
     if(VW.mode==='cust'){try{localStorage.setItem(VW_KEY,JSON.stringify({code:VW.code,mode:'cust',pin:'',hide:VW.hide?1:0}));}catch(e){}vwBegin();}
@@ -7138,7 +7141,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
     var note=(VW.hide&&Date.now()<VW.hintUntil)?'<div class="vw-note">Tombol disembunyikan. Ketuk nama toko 5 kali, atau tahan 2 detik, untuk memunculkannya lagi.</div>':'';
     if(s&&VW.code)vlName(VW.code,(s.kasir?s.kasir+' · ':'')+(s.shop||''));
     var kas=(s&&s.kasir)?'<div class="vw-kas">Kasir: '+esc(s.kasir)+'</div>':'';
-    var h='<div class="vw-top"><b data-vw="title">'+esc(s?s.shop:'Kasirku')+'</b><div class="vw-right"><div class="vw-st"><span class="vw-dot'+(up?'':' off')+'"></span>'+esc(statTxt)+'</div>'+kas+(ctl?'<div class="vw-ctl">'+ctl+'</div>':'')+'</div></div>'
+    var h='<div class="vw-top"><b data-vw="title">'+esc(s?s.shop:'Kasva')+'</b><div class="vw-right"><div class="vw-st"><span class="vw-dot'+(up?'':' off')+'"></span>'+esc(statTxt)+'</div>'+kas+(ctl?'<div class="vw-ctl">'+ctl+'</div>':'')+'</div></div>'
       +((!VW.hide&&VW.themeOpen)?'<div class="vw-themes">'+vwThemeRow()+'</div>':'')+pk;
     if(st==='deny'){
       h+='<div class="vw-big"><h1>'+(VW.lock?'Pantau dikunci sementara':'PIN pantau salah')+'</h1><p>'+(VW.lock?'Terlalu banyak salah. Coba lagi 5 menit lagi.':'Periksa PIN di tab Akun layar kasir, lalu coba lagi.')+'</p><div class="modal-actions" style="justify-content:center;margin-top:12px"><button class="btn primary" type="button" data-vw="again">Ubah kode</button></div></div>';

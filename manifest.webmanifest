@@ -1,13 +1,13 @@
 {
-  "name": "Kasirku",
-  "short_name": "Kasirku",
+  "name": "Kasva",
+  "short_name": "Kasva",
   "description": "Mesin kasir dengan produk yang bisa diubah sendiri.",
   "lang": "id",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#FFF7EC",
-  "theme_color": "#C4500A",
+  "background_color": "#F1F9F7",
+  "theme_color": "#1D6B7C",
   "icons": [
     {
       "src": "icon-192.png",
