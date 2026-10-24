@@ -329,6 +329,13 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 @media (min-width:1100px){
   .layout{grid-template-columns:minmax(0,1fr) 380px;gap:24px}
   .grid{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+  .stats{max-width:1100px}
+  #purList,#mbList,#kbList,#plist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;max-width:1100px;align-items:start}
+  #purList>.plist{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px;max-width:none}
+  #purList>p,#purList>.modal-actions,#purList>h3,#purList>.stats,#kbList>p,#mbList>p{grid-column:1/-1;margin-top:0}
+  .panel{max-width:760px}
+  #promoBody .panel{max-width:none}
+  #promoBody{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;align-items:start;max-width:1100px}
 }
 @media (min-width:1500px){
   .wrap{max-width:1560px}
@@ -478,7 +485,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
         <label class="lbl" for="storeIn">Nama toko</label>
         <input class="field" id="storeIn" maxlength="40" placeholder="Contoh: Warung Bu Sari" autocomplete="off">
         <p class="hint">Muncul di atas layar dan di struk.</p>
-        <div class="form-row"><label class="lbl" for="storeAddr">Alamat toko di struk (boleh kosong)</label><input class="field" id="storeAddr" maxlength="80" placeholder="Contoh: Jl. Sudirman No. 5, Binjai" autocomplete="off"></div>
+        <div class="form-row" style="margin-top:12px"><label class="lbl" for="storeAddr">Alamat toko di struk (boleh kosong)</label><input class="field" id="storeAddr" maxlength="80" placeholder="Contoh: Jl. Sudirman No. 5, Binjai" autocomplete="off"></div>
         <div class="form-row"><label class="lbl" for="storeTel">Nomor telepon toko di struk (boleh kosong)</label><input class="field" id="storeTel" maxlength="20" inputmode="tel" placeholder="Contoh: 0812 3456 7890" autocomplete="off"></div>
         <div class="form-row"><label class="lbl" for="storeFoot">Kalimat penutup struk</label><input class="field" id="storeFoot" maxlength="80" placeholder="Terima kasih" autocomplete="off"><p class="hint" style="margin:6px 0 0">Kosongkan kalau tidak mau ada kalimat penutup. Contoh isi: Barang yang sudah dibeli tidak dapat ditukar.</p></div>
         <div class="form-row"><label class="lbl" for="setTax">PPN (%) pada setiap transaksi</label><input class="field" id="setTax" inputmode="decimal" autocomplete="off" placeholder="0 = tanpa pajak"></div>
@@ -673,7 +680,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   }
   var canShare=STANDALONE&&detectShare();
   var canShareAny=STANDALONE&&!!navigator.share;
-  var LS='kasirku:v1',APP_VER='60',HB={rpc:false};
+  var LS='kasirku:v1',APP_VER='61',HB={rpc:false};
 
   /* ---------- Tampilan (warna dan mode, per perangkat) ---------- */
   var AC_KEY='kasirku:accent',MD_KEY='kasirku:mode',THEME0=document.documentElement.getAttribute('data-theme');
