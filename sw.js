@@ -1,4 +1,4 @@
-const CACHE = 'kasirku-v58';
+const CACHE = 'kasirku-v59';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png'];
 
 self.addEventListener('install', (e) => {
